@@ -19,6 +19,13 @@ config X86_64
 	select ARCH_USE_CMPXCHG_LOCKREF
 	select HAVE_LIVEPATCH
 
+config WANTS_KDUMP
+	bool "Want to use Kdump"
+	default n
+	---help---
+	  Say yes to build a 64-bit kernel - formerly known as x86_64
+	  Say no to build a 32-bit kernel - formerly known as i386
+
 ### Arch settings
 config X86
 	def_bool y
@@ -50,7 +57,7 @@ config X86
 	select HAVE_OPTPROBES
 	select HAVE_KPROBES_ON_FTRACE
 	select HAVE_FTRACE_MCOUNT_RECORD
-	select HAVE_FENTRY if X86_64
+	select HAVE_FENTRY if X86_64 && WANTS_KDUMP
 	select HAVE_C_RECORDMCOUNT
 	select HAVE_DYNAMIC_FTRACE
 	select HAVE_DYNAMIC_FTRACE_WITH_REGS
