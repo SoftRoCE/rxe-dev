@@ -1,4 +1,8 @@
 /*
+ * July 20, 2011 Bob Pearson <rpearson at systemfabricworks.com>
+ * added slice by 8 algorithm to the existing conventional and
+ * slice by 4 algorithms.
+ *
  * Oct 15, 2000 Matt Domsch <Matt_Domsch@dell.com>
  * Nicer crc32 functions/docs submitted by linux@horizon.com.  Thanks!
  * Code was from the public domain, copyright abandoned.  Code was
@@ -19,7 +23,6 @@
  * This source code is licensed under the GNU General Public License,
  * Version 2.  See the file COPYING for more details.
  */
-
 #include <linux/crc32.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
@@ -28,14 +31,15 @@
 #include <linux/init.h>
 #include <asm/atomic.h>
 #include "crc32defs.h"
-#if CRC_LE_BITS == 8
-# define tole(x) __constant_cpu_to_le32(x)
+
+#if CRC_LE_BITS > 8
+# define tole(x) (__force u32) __constant_cpu_to_le32(x)
 #else
 # define tole(x) (x)
 #endif
 
-#if CRC_BE_BITS == 8
-# define tobe(x) __constant_cpu_to_be32(x)
+#if CRC_BE_BITS > 8
+# define tobe(x) (__force u32) __constant_cpu_to_be32(x)
 #else
 # define tobe(x) (x)
 #endif
@@ -45,54 +49,228 @@ MODULE_AUTHOR("Matt Domsch <Matt_Domsch@dell.com>");
 MODULE_DESCRIPTION("Ethernet CRC32 calculations");
 MODULE_LICENSE("GPL");
 
-#if CRC_LE_BITS == 8 || CRC_BE_BITS == 8
-
-static inline u32
-crc32_body(u32 crc, unsigned char const *buf, size_t len, const u32 (*tab)[256])
+#if CRC_LE_BITS > 8
+static inline u32 crc32_le_body(u32 crc, u8 const *buf, size_t len)
 {
-# ifdef __LITTLE_ENDIAN
-#  define DO_CRC(x) crc = tab[0][(crc ^ (x)) & 255] ^ (crc >> 8)
-#  define DO_CRC4 crc = tab[3][(crc) & 255] ^ \
-		tab[2][(crc >> 8) & 255] ^ \
-		tab[1][(crc >> 16) & 255] ^ \
-		tab[0][(crc >> 24) & 255]
-# else
-#  define DO_CRC(x) crc = tab[0][((crc >> 24) ^ (x)) & 255] ^ (crc << 8)
-#  define DO_CRC4 crc = tab[0][(crc) & 255] ^ \
-		tab[1][(crc >> 8) & 255] ^ \
-		tab[2][(crc >> 16) & 255] ^ \
-		tab[3][(crc >> 24) & 255]
-# endif
-	const u32 *b;
-	size_t    rem_len;
+	const u8 *p8;
+	const u32 *p32;
+	int init_bytes, end_bytes;
+	size_t words;
+	int i;
+	u32 q;
+	u8 i0, i1, i2, i3;
 
-	/* Align it */
-	if (unlikely((long)buf & 3 && len)) {
-		do {
-			DO_CRC(*buf++);
-		} while ((--len) && ((long)buf)&3);
+	crc = (__force u32) __cpu_to_le32(crc);
+
+#if CRC_LE_BITS == 64
+	p8 = buf;
+	p32 = (u32 *)(((uintptr_t)p8 + 7) & ~7);
+
+	init_bytes = (uintptr_t)p32 - (uintptr_t)p8;
+	if (init_bytes > len)
+		init_bytes = len;
+	words = (len - init_bytes) >> 3;
+	end_bytes = (len - init_bytes) & 7;
+#else
+	p8 = buf;
+	p32 = (u32 *)(((uintptr_t)p8 + 3) & ~3);
+
+	init_bytes = (uintptr_t)p32 - (uintptr_t)p8;
+	if (init_bytes > len)
+		init_bytes = len;
+	words = (len - init_bytes) >> 2;
+	end_bytes = (len - init_bytes) & 3;
+#endif
+
+	for (i = 0; i < init_bytes; i++) {
+#ifdef __LITTLE_ENDIAN
+		i0 = *p8++ ^ crc;
+		crc = t0_le[i0] ^ (crc >> 8);
+#else
+		i0 = *p8++ ^ (crc >> 24);
+		crc = t0_le[i0] ^ (crc << 8);
+#endif
 	}
-	rem_len = len & 3;
-	/* load data 32 bits wide, xor data 32 bits wide. */
-	len = len >> 2;
-	b = (const u32 *)buf;
-	for (--b; len; --len) {
-		crc ^= *++b; /* use pre increment for speed */
-		DO_CRC4;
+
+	for (i = 0; i < words; i++) {
+#ifdef __LITTLE_ENDIAN
+#  if CRC_LE_BITS == 64
+		/* slice by 8 algorithm */
+		q = *p32++ ^ crc;
+		i3 = q;
+		i2 = q >> 8;
+		i1 = q >> 16;
+		i0 = q >> 24;
+		crc = t7_le[i3] ^ t6_le[i2] ^ t5_le[i1] ^ t4_le[i0];
+
+		q = *p32++;
+		i3 = q;
+		i2 = q >> 8;
+		i1 = q >> 16;
+		i0 = q >> 24;
+		crc ^= t3_le[i3] ^ t2_le[i2] ^ t1_le[i1] ^ t0_le[i0];
+#  else
+		/* slice by 4 algorithm */
+		q = *p32++ ^ crc;
+		i3 = q;
+		i2 = q >> 8;
+		i1 = q >> 16;
+		i0 = q >> 24;
+		crc = t3_le[i3] ^ t2_le[i2] ^ t1_le[i1] ^ t0_le[i0];
+#  endif
+#else
+#  if CRC_LE_BITS == 64
+		q = *p32++ ^ crc;
+		i3 = q >> 24;
+		i2 = q >> 16;
+		i1 = q >> 8;
+		i0 = q;
+		crc = t7_le[i3] ^ t6_le[i2] ^ t5_le[i1] ^ t4_le[i0];
+
+		q = *p32++;
+		i3 = q >> 24;
+		i2 = q >> 16;
+		i1 = q >> 8;
+		i0 = q;
+		crc ^= t3_le[i3] ^ t2_le[i2] ^ t1_le[i1] ^ t0_le[i0];
+#  else
+		q = *p32++ ^ crc;
+		i3 = q >> 24;
+		i2 = q >> 16;
+		i1 = q >> 8;
+		i0 = q;
+		crc = t3_le[i3] ^ t2_le[i2] ^ t1_le[i1] ^ t0_le[i0];
+#  endif
+#endif
 	}
-	len = rem_len;
-	/* And the last few bytes */
-	if (len) {
-		u8 *p = (u8 *)(b + 1) - 1;
-		do {
-			DO_CRC(*++p); /* use pre increment for speed */
-		} while (--len);
+
+	p8 = (u8 *)p32;
+
+	for (i = 0; i < end_bytes; i++) {
+#ifdef __LITTLE_ENDIAN
+		i0 = *p8++ ^ crc;
+		crc = t0_le[i0] ^ (crc >> 8);
+#else
+		i0 = *p8++ ^ (crc >> 24);
+		crc = t0_le[i0] ^ (crc << 8);
+#endif
 	}
-	return crc;
-#undef DO_CRC
-#undef DO_CRC4
+
+	return __le32_to_cpu((__force __le32)crc);
 }
 #endif
+
+#if CRC_BE_BITS > 8
+static inline u32 crc32_be_body(u32 crc, u8 const *buf, size_t len)
+{
+	const u8 *p8;
+	const u32 *p32;
+	int init_bytes, end_bytes;
+	size_t words;
+	int i;
+	u32 q;
+	u8 i0, i1, i2, i3;
+
+	crc = (__force u32) __cpu_to_be32(crc);
+
+#if CRC_LE_BITS == 64
+	p8 = buf;
+	p32 = (u32 *)(((uintptr_t)p8 + 7) & ~7);
+
+	init_bytes = (uintptr_t)p32 - (uintptr_t)p8;
+	if (init_bytes > len)
+		init_bytes = len;
+	words = (len - init_bytes) >> 3;
+	end_bytes = (len - init_bytes) & 7;
+#else
+	p8 = buf;
+	p32 = (u32 *)(((uintptr_t)p8 + 3) & ~3);
+
+	init_bytes = (uintptr_t)p32 - (uintptr_t)p8;
+	if (init_bytes > len)
+		init_bytes = len;
+	words = (len - init_bytes) >> 2;
+	end_bytes = (len - init_bytes) & 3;
+#endif
+
+	for (i = 0; i < init_bytes; i++) {
+#ifdef __LITTLE_ENDIAN
+		i0 = *p8++ ^ crc;
+		crc = t0_be[i0] ^ (crc >> 8);
+#else
+		i0 = *p8++ ^ (crc >> 24);
+		crc = t0_be[i0] ^ (crc << 8);
+#endif
+	}
+
+	for (i = 0; i < words; i++) {
+#ifdef __LITTLE_ENDIAN
+#  if CRC_LE_BITS == 64
+		/* slice by 8 algorithm */
+		q = *p32++ ^ crc;
+		i3 = q;
+		i2 = q >> 8;
+		i1 = q >> 16;
+		i0 = q >> 24;
+		crc = t7_be[i3] ^ t6_be[i2] ^ t5_be[i1] ^ t4_be[i0];
+
+		q = *p32++;
+		i3 = q;
+		i2 = q >> 8;
+		i1 = q >> 16;
+		i0 = q >> 24;
+		crc ^= t3_be[i3] ^ t2_be[i2] ^ t1_be[i1] ^ t0_be[i0];
+#  else
+		/* slice by 4 algorithm */
+		q = *p32++ ^ crc;
+		i3 = q;
+		i2 = q >> 8;
+		i1 = q >> 16;
+		i0 = q >> 24;
+		crc = t3_be[i3] ^ t2_be[i2] ^ t1_be[i1] ^ t0_be[i0];
+#  endif
+#else
+#  if CRC_LE_BITS == 64
+		q = *p32++ ^ crc;
+		i3 = q >> 24;
+		i2 = q >> 16;
+		i1 = q >> 8;
+		i0 = q;
+		crc = t7_be[i3] ^ t6_be[i2] ^ t5_be[i1] ^ t4_be[i0];
+
+		q = *p32++;
+		i3 = q >> 24;
+		i2 = q >> 16;
+		i1 = q >> 8;
+		i0 = q;
+		crc ^= t3_be[i3] ^ t2_be[i2] ^ t1_be[i1] ^ t0_be[i0];
+#  else
+		q = *p32++ ^ crc;
+		i3 = q >> 24;
+		i2 = q >> 16;
+		i1 = q >> 8;
+		i0 = q;
+		crc = t3_be[i3] ^ t2_be[i2] ^ t1_be[i1] ^ t0_be[i0];
+#  endif
+#endif
+	}
+
+	p8 = (u8 *)p32;
+
+	for (i = 0; i < end_bytes; i++) {
+#ifdef __LITTLE_ENDIAN
+		i0 = *p8++ ^ crc;
+		crc = t0_be[i0] ^ (crc >> 8);
+#else
+		i0 = *p8++ ^ (crc >> 24);
+		crc = t0_be[i0] ^ (crc << 8);
+#endif
+	}
+
+	return __be32_to_cpu((__force __be32)crc);
+}
+#endif
+
 /**
  * crc32_le() - Calculate bitwise little-endian Ethernet AUTODIN II CRC32
  * @crc: seed value for computation.  ~0 for Ethernet, sometimes 0 for
@@ -100,53 +278,40 @@ crc32_body(u32 crc, unsigned char const *buf, size_t len, const u32 (*tab)[256])
  * @p: pointer to buffer over which CRC is run
  * @len: length of buffer @p
  */
-u32 __pure crc32_le(u32 crc, unsigned char const *p, size_t len);
-
-#if CRC_LE_BITS == 1
-/*
- * In fact, the table-based code will work in this case, but it can be
- * simplified by inlining the table in ?: form.
- */
-
 u32 __pure crc32_le(u32 crc, unsigned char const *p, size_t len)
 {
+#if CRC_LE_BITS == 1
 	int i;
 	while (len--) {
 		crc ^= *p++;
 		for (i = 0; i < 8; i++)
 			crc = (crc >> 1) ^ ((crc & 1) ? CRCPOLY_LE : 0);
 	}
-	return crc;
-}
-#else				/* Table-based approach */
-
-u32 __pure crc32_le(u32 crc, unsigned char const *p, size_t len)
-{
-# if CRC_LE_BITS == 8
-	const u32      (*tab)[] = crc32table_le;
-
-	crc = __cpu_to_le32(crc);
-	crc = crc32_body(crc, p, len, tab);
-	return __le32_to_cpu(crc);
-# elif CRC_LE_BITS == 4
-	while (len--) {
-		crc ^= *p++;
-		crc = (crc >> 4) ^ crc32table_le[crc & 15];
-		crc = (crc >> 4) ^ crc32table_le[crc & 15];
-	}
-	return crc;
 # elif CRC_LE_BITS == 2
 	while (len--) {
 		crc ^= *p++;
-		crc = (crc >> 2) ^ crc32table_le[crc & 3];
-		crc = (crc >> 2) ^ crc32table_le[crc & 3];
-		crc = (crc >> 2) ^ crc32table_le[crc & 3];
-		crc = (crc >> 2) ^ crc32table_le[crc & 3];
+		crc = (crc >> 2) ^ t0_le[crc & 0x03];
+		crc = (crc >> 2) ^ t0_le[crc & 0x03];
+		crc = (crc >> 2) ^ t0_le[crc & 0x03];
+		crc = (crc >> 2) ^ t0_le[crc & 0x03];
 	}
-	return crc;
+# elif CRC_LE_BITS == 4
+	while (len--) {
+		crc ^= *p++;
+		crc = (crc >> 4) ^ t0_le[crc & 0x0f];
+		crc = (crc >> 4) ^ t0_le[crc & 0x0f];
+	}
+# elif CRC_LE_BITS == 8
+	while (len--) {
+		crc ^= *p++;
+		crc = (crc >> 8) ^ t0_le[crc & 0xff];
+	}
+# else
+	crc = crc32_le_body(crc, p, len);
 # endif
+	return crc;
 }
-#endif
+EXPORT_SYMBOL(crc32_le);
 
 /**
  * crc32_be() - Calculate bitwise big-endian Ethernet AUTODIN II CRC32
@@ -155,57 +320,40 @@ u32 __pure crc32_le(u32 crc, unsigned char const *p, size_t len)
  * @p: pointer to buffer over which CRC is run
  * @len: length of buffer @p
  */
-u32 __pure crc32_be(u32 crc, unsigned char const *p, size_t len);
-
-#if CRC_BE_BITS == 1
-/*
- * In fact, the table-based code will work in this case, but it can be
- * simplified by inlining the table in ?: form.
- */
-
 u32 __pure crc32_be(u32 crc, unsigned char const *p, size_t len)
 {
+#if CRC_BE_BITS == 1
 	int i;
 	while (len--) {
 		crc ^= *p++ << 24;
 		for (i = 0; i < 8; i++)
-			crc =
-			    (crc << 1) ^ ((crc & 0x80000000) ? CRCPOLY_BE :
-					  0);
+			crc = (crc << 1) ^
+			      ((crc & 0x80000000) ? CRCPOLY_BE : 0);
 	}
-	return crc;
-}
-
-#else				/* Table-based approach */
-u32 __pure crc32_be(u32 crc, unsigned char const *p, size_t len)
-{
-# if CRC_BE_BITS == 8
-	const u32      (*tab)[] = crc32table_be;
-
-	crc = __cpu_to_be32(crc);
-	crc = crc32_body(crc, p, len, tab);
-	return __be32_to_cpu(crc);
-# elif CRC_BE_BITS == 4
-	while (len--) {
-		crc ^= *p++ << 24;
-		crc = (crc << 4) ^ crc32table_be[crc >> 28];
-		crc = (crc << 4) ^ crc32table_be[crc >> 28];
-	}
-	return crc;
 # elif CRC_BE_BITS == 2
 	while (len--) {
 		crc ^= *p++ << 24;
-		crc = (crc << 2) ^ crc32table_be[crc >> 30];
-		crc = (crc << 2) ^ crc32table_be[crc >> 30];
-		crc = (crc << 2) ^ crc32table_be[crc >> 30];
-		crc = (crc << 2) ^ crc32table_be[crc >> 30];
+		crc = (crc << 2) ^ t0_be[crc >> 30];
+		crc = (crc << 2) ^ t0_be[crc >> 30];
+		crc = (crc << 2) ^ t0_be[crc >> 30];
+		crc = (crc << 2) ^ t0_be[crc >> 30];
 	}
-	return crc;
+# elif CRC_BE_BITS == 4
+	while (len--) {
+		crc ^= *p++ << 24;
+		crc = (crc << 4) ^ t0_be[crc >> 28];
+		crc = (crc << 4) ^ t0_be[crc >> 28];
+	}
+# elif CRC_BE_BITS == 8
+	while (len--) {
+		crc ^= *p++ << 24;
+		crc = (crc << 8) ^ t0_be[crc >> 24];
+	}
+# else
+	crc = crc32_be_body(crc, p, len);
 # endif
+	return crc;
 }
-#endif
-
-EXPORT_SYMBOL(crc32_le);
 EXPORT_SYMBOL(crc32_be);
 
 /*
