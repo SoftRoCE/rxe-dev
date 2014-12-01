@@ -118,4 +118,6 @@ source "drivers/staging/ipath/Kconfig"
 
 source "drivers/staging/hfi1/Kconfig"
 
+source "drivers/staging/rxe/Kconfig"
+
 endif # STAGING
