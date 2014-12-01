@@ -108,10 +108,6 @@ enum copy_direction {
 int rxe_mem_init_dma(struct rxe_dev *rxe, struct rxe_pd *pd,
 		     int access, struct rxe_mem *mem);
 
-int rxe_mem_init_phys(struct rxe_dev *rxe, struct rxe_pd *pd,
-		      int access, u64 iova, struct ib_phys_buf *buf,
-		      int num_buf, struct rxe_mem *mem);
-
 int rxe_mem_init_user(struct rxe_dev *rxe, struct rxe_pd *pd, u64 start,
 		      u64 length, u64 iova, int access, struct ib_udata *udata,
 		      struct rxe_mem *mr);
