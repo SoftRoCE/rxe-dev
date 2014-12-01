@@ -67,4 +67,6 @@ void rxe_remove(struct rxe_dev *rxe);
 
 int rxe_rcv(struct sk_buff *skb);
 
+void rxe_dev_put(struct rxe_dev *rxe);
+
 #endif /* RXE_H */
