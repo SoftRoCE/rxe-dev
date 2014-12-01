@@ -3,3 +3,4 @@ obj-$(CONFIG_INFINIBAND_AMSO1100)	+= amso1100/
 obj-$(CONFIG_INFINIBAND_EHCA)	+= ehca/
 obj-$(CONFIG_INFINIBAND_HFI1)	+= hfi1/
 obj-$(CONFIG_INFINIBAND_IPATH)	+= ipath/
+obj-$(CONFIG_INFINIBAND_RXE)    += rxe/

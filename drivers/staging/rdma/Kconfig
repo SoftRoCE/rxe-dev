@@ -30,4 +30,6 @@ source "drivers/staging/rdma/hfi1/Kconfig"
 
 source "drivers/staging/rdma/ipath/Kconfig"
 
+source "drivers/staging/rdma/rxe/Kconfig"
+
 endif
