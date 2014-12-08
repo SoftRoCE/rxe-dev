@@ -418,8 +418,8 @@ static int rxe_notify(struct notifier_block *not_blk,
 		      unsigned long event,
 		      void *arg)
 {
-	struct net_device *ndev = arg;
 	struct rxe_dev *rxe;
+	struct net_device *ndev = netdev_notifier_info_to_dev(arg);
 
 	if (!can_support_rxe(ndev))
 		goto out;
