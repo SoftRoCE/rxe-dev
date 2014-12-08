@@ -34,6 +34,7 @@
 #ifndef RXE_H
 #define RXE_H
 
+#include <linux/module.h>
 #include <linux/skbuff.h>
 #include <linux/crc32.h>
 

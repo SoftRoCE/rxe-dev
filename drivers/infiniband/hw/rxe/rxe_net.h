@@ -36,6 +36,7 @@
 
 #include <net/sock.h>
 #include <net/if_inet6.h>
+#include <linux/module.h>
 
 /*
  * this should be defined in .../include/linux/if_ether.h
