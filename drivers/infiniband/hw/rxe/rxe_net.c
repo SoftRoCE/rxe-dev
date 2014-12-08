@@ -141,6 +141,33 @@ static int mcast_delete(struct rxe_dev *rxe, union ib_gid *mgid)
 	return err;
 }
 
+static inline int get_xps_queue(struct net_device *dev, struct sk_buff *skb)
+{
+	return -1;
+}
+
+static u16 __netdev_pick_tx(struct net_device *dev, struct sk_buff *skb)
+{
+	struct sock *sk = skb->sk;
+	int queue_index = sk_tx_queue_get(sk);
+
+	if (queue_index < 0 || skb->ooo_okay ||
+	    queue_index >= dev->real_num_tx_queues) {
+		int new_index = get_xps_queue(dev, skb);
+
+		if (new_index < 0)
+			new_index = skb_tx_hash(dev, skb);
+
+		if (queue_index != new_index && sk &&
+		    rcu_access_pointer(sk->sk_dst_cache))
+			sk_tx_queue_set(sk, new_index);
+
+		queue_index = new_index;
+	}
+
+	return queue_index;
+}
+
 static inline int queue_deactivated(struct sk_buff *skb)
 {
 	const struct net_device_ops *ops = skb->dev->netdev_ops;
@@ -148,7 +175,8 @@ static inline int queue_deactivated(struct sk_buff *skb)
 	struct netdev_queue *txq;
 
 	if (ops->ndo_select_queue)
-		queue_index = ops->ndo_select_queue(skb->dev, skb);
+		queue_index = ops->ndo_select_queue(skb->dev, skb, NULL,
+						    __netdev_pick_tx);
 	else if (skb->dev->real_num_tx_queues > 1)
 		queue_index = skb_tx_hash(skb->dev, skb);
 
