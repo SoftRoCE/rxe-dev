@@ -420,7 +420,8 @@ int rxe_qp_chk_attr(struct rxe_dev *rxe, struct rxe_qp *qp,
 	enum ib_qp_state new_state = (mask & IB_QP_STATE) ?
 					attr->qp_state : cur_state;
 
-	if (!ib_modify_qp_is_ok(cur_state, new_state, qp_type(qp), mask)) {
+	if (!ib_modify_qp_is_ok(cur_state, new_state, qp_type(qp), mask,
+				IB_LINK_LAYER_ETHERNET)) {
 		pr_warn("invalid mask or state for qp\n");
 		goto err1;
 	}
