@@ -234,11 +234,11 @@ int rxe_mem_init_user(struct rxe_dev *rxe, struct rxe_pd *pd, u64 start,
 		      u64 length, u64 iova, int access, struct ib_udata *udata,
 	struct rxe_mem *mem)
 {
-	int			i;
+	int			entry;
 	struct rxe_map		**map;
 	struct ib_phys_buf	*buf = NULL;
 	struct ib_umem		*umem;
-	struct ib_umem_chunk	*chunk;
+	struct scatterlist	*sg;
 	int			num_buf;
 	void			*vaddr;
 	int err;
@@ -252,16 +252,14 @@ int rxe_mem_init_user(struct rxe_dev *rxe, struct rxe_pd *pd, u64 start,
 	}
 
 	mem->umem = umem;
-
-	num_buf = 0;
-	list_for_each_entry(chunk, &umem->chunk_list, list)
-		num_buf += chunk->nents;
+	num_buf = umem->nmap;
 
 	rxe_mem_init(access, mem);
 
 	err = rxe_mem_alloc(rxe, mem, num_buf);
 	if (err) {
 		pr_warn("err %d from rxe_mem_alloc\n", err);
+		ib_umem_release(umem);
 		goto err1;
 	}
 
@@ -275,26 +273,23 @@ int rxe_mem_init_user(struct rxe_dev *rxe, struct rxe_pd *pd, u64 start,
 	if (length > 0) {
 		buf = map[0]->buf;
 
-		list_for_each_entry(chunk, &umem->chunk_list, list) {
-			for (i = 0; i < chunk->nents; i++) {
-				vaddr = page_address(sg_page(&chunk->
-							     page_list[i]));
-				if (!vaddr) {
-					pr_warn("null vaddr\n");
-					err = -ENOMEM;
-					goto err1;
-				}
+		for_each_sg(umem->sg_head.sgl, sg, umem->nmap, entry) {
+			vaddr = page_address(sg_page(sg));
+			if (!vaddr) {
+				pr_warn("null vaddr\n");
+				err = -ENOMEM;
+				goto err1;
+			}
 
-				buf->addr = (uintptr_t)vaddr;
-				buf->size = umem->page_size;
-				num_buf++;
-				buf++;
+			buf->addr = (uintptr_t)vaddr;
+			buf->size = umem->page_size;
+			num_buf++;
+			buf++;
 
-				if (num_buf >= RXE_BUF_PER_MAP) {
-					map++;
-					buf = map[0]->buf;
-					num_buf = 0;
-				}
+			if (num_buf >= RXE_BUF_PER_MAP) {
+				map++;
+				buf = map[0]->buf;
+				num_buf = 0;
 			}
 		}
 	}
