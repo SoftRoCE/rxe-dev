@@ -6367,6 +6367,14 @@ W:	http://www.mellanox.com
 Q:	http://patchwork.ozlabs.org/project/netdev/list/
 F:	drivers/net/ethernet/mellanox/mlx4/en_*
 
+SOFT-ROCE DRIVER (rxe)
+M:      Kamal Heib <kamalh@mellanox.com>
+L:      linux-rdma@vger.kernel.org
+S:      Supported
+W:      http://www.mellanox.com
+Q:      http://patchwork.kernel.org/project/linux-rdma/list/
+F:      drivers/infiniband/hw/rxe/
+
 MEMORY MANAGEMENT
 L:	linux-mm@kvack.org
 W:	http://www.linux-mm.org
