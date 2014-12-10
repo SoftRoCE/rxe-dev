@@ -1022,12 +1022,15 @@ static int rxe_rereg_phys_mr(struct ib_mr *ibmr, int mr_rereg_mask,
 	return -EINVAL;
 }
 
-static struct ib_mw *rxe_alloc_mw(struct ib_pd *ibpd)
+static struct ib_mw *rxe_alloc_mw(struct ib_pd *ibpd, enum ib_mw_type type)
 {
 	struct rxe_dev *rxe = to_rdev(ibpd->device);
 	struct rxe_pd *pd = to_rpd(ibpd);
 	struct rxe_mem *mw;
 	int err;
+
+	if (type != IB_MW_TYPE_1)
+		return ERR_PTR(-EINVAL);
 
 	mw = rxe_alloc(&rxe->mw_pool);
 	if (!mw) {
