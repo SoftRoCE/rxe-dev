@@ -228,17 +228,22 @@ static inline int addr_same(struct rxe_dev *rxe, struct rxe_av *av)
 }
 
 static struct sk_buff *init_packet(struct rxe_dev *rxe, struct rxe_av *av,
-				   int paylen)
+				   int paylen, int align)
 {
 	struct sk_buff *skb;
 	struct rxe_pkt_info *pkt;
+	int pad;
 
-	skb = alloc_skb(paylen + RXE_GRH_BYTES + LL_RESERVED_SPACE(rxe->ndev),
-			GFP_ATOMIC);
+	/* finish computing (negative)alignment MOD 16 of IB payload */
+	pad = (-(RXE_GRH_BYTES + LL_RESERVED_SPACE(rxe->ndev) + align)) &
+		RXE_SKB_ALIGN_PAD_MASK;
+
+	skb = alloc_skb(paylen + RXE_GRH_BYTES +
+			LL_RESERVED_SPACE(rxe->ndev) + pad, GFP_ATOMIC);
 	if (!skb)
 		return NULL;
 
-	skb_reserve(skb, LL_RESERVED_SPACE(rxe->ndev));
+	skb_reserve(skb, LL_RESERVED_SPACE(rxe->ndev) + pad);
 	skb_reset_network_header(skb);
 
 	skb->dev	= rxe->ndev;

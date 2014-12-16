@@ -451,7 +451,7 @@ struct rxe_ifc_ops {
 	int (*send)(struct rxe_dev *rxe, struct sk_buff *skb);
 	int (*loopback)(struct rxe_dev *rxe, struct sk_buff *skb);
 	struct sk_buff *(*init_packet)(struct rxe_dev *rxe, struct rxe_av *av,
-				       int paylen);
+				       int paylen, int align);
 	int (*init_av)(struct rxe_dev *rxe, struct ib_ah_attr *attr,
 		       struct rxe_av *av);
 	char *(*parent_name)(struct rxe_dev *rxe, unsigned int port_num);
