@@ -125,23 +125,22 @@ done:
 int rxe_arbiter(void *arg)
 {
 	int err;
-	unsigned long flags;
 	struct rxe_dev *rxe = (struct rxe_dev *)arg;
 	struct sk_buff *skb;
 	struct list_head *qpl;
 	struct rxe_qp *qp;
 
 	/* get the next qp's send queue */
-	spin_lock_irqsave(&rxe->arbiter.list_lock, flags);
+	spin_lock_bh(&rxe->arbiter.list_lock);
 	if (list_empty(&rxe->arbiter.qp_list)) {
-		spin_unlock_irqrestore(&rxe->arbiter.list_lock, flags);
+		spin_unlock_bh(&rxe->arbiter.list_lock);
 		return 1;
 	}
 
 	qpl = rxe->arbiter.qp_list.next;
 	list_del_init(qpl);
 	qp = list_entry(qpl, struct rxe_qp, arbiter_list);
-	spin_unlock_irqrestore(&rxe->arbiter.list_lock, flags);
+	spin_unlock_bh(&rxe->arbiter.list_lock);
 
 	/* get next packet from queue and try to send it
 	   note skb could have already been removed */
@@ -157,12 +156,12 @@ int rxe_arbiter(void *arg)
 	}
 
 	/* if more work in queue put qp back on the list */
-	spin_lock_irqsave(&rxe->arbiter.list_lock, flags);
+	spin_lock_bh(&rxe->arbiter.list_lock);
 
 	if (list_empty(qpl) && !skb_queue_empty(&qp->send_pkts))
 		list_add_tail(qpl, &rxe->arbiter.qp_list);
 
-	spin_unlock_irqrestore(&rxe->arbiter.list_lock, flags);
+	spin_unlock_bh(&rxe->arbiter.list_lock);
 	return 0;
 }
 
@@ -173,16 +172,15 @@ void arbiter_skb_queue(struct rxe_dev *rxe, struct rxe_qp *qp,
 		       struct sk_buff *skb)
 {
 	int must_sched;
-	unsigned long flags;
 
 	/* add packet to send queue */
 	skb_queue_tail(&qp->send_pkts, skb);
 
 	/* if not already there add qp to arbiter list */
-	spin_lock_irqsave(&rxe->arbiter.list_lock, flags);
+	spin_lock_bh(&rxe->arbiter.list_lock);
 	if (list_empty(&qp->arbiter_list))
 		list_add_tail(&qp->arbiter_list, &rxe->arbiter.qp_list);
-	spin_unlock_irqrestore(&rxe->arbiter.list_lock, flags);
+	spin_unlock_bh(&rxe->arbiter.list_lock);
 
 	/* run the arbiter, use tasklet unless only one packet */
 	must_sched = skb_queue_len(&qp->resp_pkts) > 1;
