@@ -1131,7 +1131,7 @@ static enum resp_states duplicate_request(struct rxe_qp *qp,
 						skb_copy);
 			else
 				arbiter_skb_queue(to_rdev(qp->ibqp.device), qp,
-						skb_copy);
+						  skb_copy);
 		}
 
 		/* Resource not found. Class D error. Drop the request. */

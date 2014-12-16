@@ -91,7 +91,7 @@ struct rxe_pool_entry {
 
 struct rxe_pool {
 	struct rxe_dev		*rxe;
-	spinlock_t              pool_lock;
+	spinlock_t              pool_lock; /* pool spinlock */
 	size_t			elem_size;
 	struct kref		ref_cnt;
 	void			(*cleanup)(void *obj);
