@@ -696,7 +696,11 @@ int rxe_requester(void *arg)
 
 	update_state(qp, wqe, pkt, payload);
 
-	arbiter_skb_queue(to_rdev(qp->ibqp.device), qp, PKT_TO_SKB(pkt));
+	if (rxe_bypass_arbiter)
+		xmit_one_packet(to_rdev(qp->ibqp.device), qp, PKT_TO_SKB(pkt));
+	else
+		arbiter_skb_queue(to_rdev(qp->ibqp.device), qp,
+					 PKT_TO_SKB(pkt));
 
 	if (mask & RXE_END_MASK)
 		goto complete;
