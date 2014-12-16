@@ -970,13 +970,4 @@ struct rxe_opcode_info rxe_opcode[RXE_NUM_OPCODE] = {
 		}
 	},
 
-	/* CNP */
-	[IB_OPCODE_CN_CNP]			= {
-		.name	= "IB_OPCODE_CN_CNP",
-		.mask	= RXE_CNP_MASK,
-		.length = RXE_BTH_BYTES,
-		.offset = {
-			[RXE_BTH]	= 0,
-		}
-	},
 };
