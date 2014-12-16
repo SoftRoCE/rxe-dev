@@ -130,6 +130,11 @@ module_param_named(default_mtu, rxe_default_mtu, int, 0644);
 MODULE_PARM_DESC(default_mtu,
 		 "default rxe port mtu");
 
+int rxe_bypass_arbiter;
+module_param_named(bypass_arbiter, rxe_bypass_arbiter, int, 0644);
+MODULE_PARM_DESC(bypass_arbiter,
+		 "do not arbitrate for network send");
+
 /* free resources for all ports on a device */
 static void rxe_cleanup_ports(struct rxe_dev *rxe)
 {
