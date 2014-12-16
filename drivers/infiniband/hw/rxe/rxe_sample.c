@@ -89,7 +89,7 @@ static int send(struct rxe_dev *rxe, struct sk_buff *skb)
 }
 
 static struct sk_buff *init_packet(struct rxe_dev *rxe, struct rxe_av *av,
-				   int paylen)
+				   int paylen, int align)
 {
 	struct sk_buff *skb;
 	struct rxe_pkt_info *pkt;
