@@ -93,7 +93,7 @@ struct rxe_cq {
 	struct rxe_pool_entry	pelem;
 	struct ib_cq		ibcq;
 	struct rxe_queue	*queue;
-	spinlock_t		cq_lock;
+	spinlock_t		cq_lock; /* cq lock */
 	u8			notify;
 	u8			special;
 	int			is_user;
@@ -148,7 +148,7 @@ struct rxe_sq {
 	int			max_sge;
 	int			max_inline;
 	struct ib_wc		next_wc;
-	spinlock_t		sq_lock;
+	spinlock_t		sq_lock; /* sq lock */
 	struct rxe_queue	*queue;
 };
 
@@ -156,8 +156,8 @@ struct rxe_rq {
 	int			max_wr;
 	int			max_sge;
 	struct ib_wc		next_wc;
-	spinlock_t		producer_lock;
-	spinlock_t		consumer_lock;
+	spinlock_t		producer_lock; /* producer lock */
+	spinlock_t		consumer_lock; /* consumer lock */
 	struct rxe_queue	*queue;
 };
 
@@ -300,7 +300,7 @@ struct rxe_qp {
 	/* list of mcast groups qp has joined
 	   (for cleanup) */
 	struct list_head	grp_list;
-	spinlock_t		grp_lock;
+	spinlock_t		grp_lock; /* grp lock */
 
 	struct sk_buff_head	req_pkts;
 	struct sk_buff_head	resp_pkts;
@@ -330,7 +330,7 @@ struct rxe_qp {
 	/* Timer for handling RNR NAKS. */
 	struct timer_list rnr_nak_timer;
 
-	spinlock_t		state_lock;
+	spinlock_t		state_lock; /* state lock */
 };
 
 enum rxe_mem_state {
@@ -395,7 +395,7 @@ struct rxe_fast_reg_page_list {
 
 struct rxe_mc_grp {
 	struct rxe_pool_entry	pelem;
-	spinlock_t		mcg_lock;
+	spinlock_t		mcg_lock; /* mcg lock */
 	struct rxe_dev		*rxe;
 	struct list_head	qp_list;
 	union ib_gid		mgid;
@@ -422,7 +422,7 @@ struct rxe_port {
 	/* rate control */
 	/* TODO */
 
-	spinlock_t		port_lock;
+	spinlock_t		port_lock; /* port lock */
 
 	unsigned int		mtu_cap;
 
@@ -434,7 +434,7 @@ struct rxe_port {
 struct rxe_arbiter {
 	struct rxe_task		task;
 	struct list_head	qp_list;
-	spinlock_t		list_lock;
+	spinlock_t		list_lock; /* list lock */
 	struct timespec		time;
 	int			delay;
 	int			queue_stalled;
@@ -456,7 +456,7 @@ struct rxe_ifc_ops {
 		       struct rxe_av *av);
 	char *(*parent_name)(struct rxe_dev *rxe, unsigned int port_num);
 	enum rdma_link_layer (*link_layer)(struct rxe_dev *rxe,
-			      unsigned int port_num);
+					   unsigned int port_num);
 };
 
 #define RXE_QUEUE_STOPPED		(999)
@@ -495,10 +495,10 @@ struct rxe_dev {
 	struct rxe_pool		mc_grp_pool;
 	struct rxe_pool		mc_elem_pool;
 
-	spinlock_t		pending_lock;
+	spinlock_t		pending_lock; /* pending lock */
 	struct list_head	pending_mmaps;
 
-	spinlock_t		mmap_offset_lock;
+	spinlock_t		mmap_offset_lock; /* mmap offset lock */
 	int			mmap_offset;
 
 	u8			num_ports;

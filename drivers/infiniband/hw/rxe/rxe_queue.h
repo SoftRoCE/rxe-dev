@@ -91,7 +91,9 @@ int rxe_queue_resize(struct rxe_queue *q,
 		     unsigned int elem_size,
 		     struct ib_ucontext *context,
 		     struct ib_udata *udata,
+		     /* producer lock */
 		     spinlock_t *producer_lock,
+		     /* consumer lock */
 		     spinlock_t *consumer_lock);
 
 void rxe_queue_cleanup(struct rxe_queue *queue);

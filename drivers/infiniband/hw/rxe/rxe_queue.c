@@ -56,7 +56,7 @@ int do_mmap_info(struct rxe_dev *rxe,
 			goto err1;
 
 		err = copy_to_user(udata->outbuf + offset, &ip->info,
-				       sizeof(ip->info));
+				   sizeof(ip->info));
 		if (err)
 			goto err2;
 
@@ -153,7 +153,6 @@ static int resize_finish(struct rxe_queue *q, struct rxe_queue *new_q,
 	*q = *new_q;
 	*new_q = temp;
 
-
 	return 0;
 }
 
@@ -187,8 +186,9 @@ int rxe_queue_resize(struct rxe_queue *q,
 		spin_lock_bh(producer_lock);
 		err = resize_finish(q, new_q, num_elem);
 		spin_unlock_bh(producer_lock);
-	} else
+	} else {
 		err = resize_finish(q, new_q, num_elem);
+	}
 
 	spin_unlock_bh(consumer_lock);
 
