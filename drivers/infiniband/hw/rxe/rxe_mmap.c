@@ -75,7 +75,6 @@ static void rxe_vma_close(struct vm_area_struct *vma)
 	struct rxe_mmap_info *ip = vma->vm_private_data;
 
 	kref_put(&ip->ref, rxe_mmap_release);
-
 }
 
 static struct vm_operations_struct rxe_vm_ops = {

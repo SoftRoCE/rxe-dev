@@ -525,8 +525,8 @@ static int validate_send_wr(struct rxe_qp *qp, struct ib_send_wr *ibwr,
 			goto err1;
 	}
 
-	if (unlikely((ibwr->send_flags & IB_SEND_INLINE)
-		     && (length > sq->max_inline)))
+	if (unlikely((ibwr->send_flags & IB_SEND_INLINE) &&
+		     (length > sq->max_inline)))
 		goto err1;
 
 	return 0;
@@ -546,9 +546,9 @@ static int init_send_wqe(struct rxe_qp *qp, struct ib_send_wr *ibwr,
 
 	memcpy(&wqe->ibwr, ibwr, sizeof(wqe->ibwr));
 
-	if (qp_type(qp) == IB_QPT_UD
-	    || qp_type(qp) == IB_QPT_SMI
-	    || qp_type(qp) == IB_QPT_GSI)
+	if (qp_type(qp) == IB_QPT_UD ||
+	    qp_type(qp) == IB_QPT_SMI ||
+	    qp_type(qp) == IB_QPT_GSI)
 		memcpy(&wqe->av, &to_rah(ibwr->wr.ud.ah)->av, sizeof(wqe->av));
 
 	if (unlikely(ibwr->send_flags & IB_SEND_INLINE)) {
@@ -662,7 +662,7 @@ static int rxe_post_send(struct ib_qp *ibqp, struct ib_send_wr *wr,
 		}
 
 		if (unlikely((wr->send_flags & IB_SEND_INLINE) &&
-		    !(mask & WR_INLINE_MASK))) {
+			     !(mask & WR_INLINE_MASK))) {
 			err = -EINVAL;
 			*bad_wr = wr;
 			break;
