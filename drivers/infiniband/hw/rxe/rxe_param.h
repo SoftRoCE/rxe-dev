@@ -208,5 +208,6 @@ extern int rxe_fast_comp;
 extern int rxe_fast_resp;
 extern int rxe_fast_req;
 extern int rxe_fast_arb;
+extern int rxe_bypass_arbiter;
 
 #endif /* RXE_PARAM_H */
