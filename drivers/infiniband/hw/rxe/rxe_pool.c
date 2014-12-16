@@ -249,11 +249,10 @@ out:
 static void rxe_pool_release(struct kref *kref)
 {
 	struct rxe_pool *pool = container_of(kref, struct rxe_pool, ref_cnt);
-	unsigned long flags;
 
-	spin_lock_irqsave(&pool->pool_lock, flags);
+	spin_lock_bh(&pool->pool_lock);
 	pool->state = rxe_pool_invalid;
-	spin_unlock_irqrestore(&pool->pool_lock, flags);
+	spin_unlock_bh(&pool->pool_lock);
 
 	kfree(pool->table);
 }
@@ -261,11 +260,10 @@ static void rxe_pool_release(struct kref *kref)
 int rxe_pool_cleanup(struct rxe_pool *pool)
 {
 	int num_elem;
-	unsigned long flags;
 
-	spin_lock_irqsave(&pool->pool_lock, flags);
+	spin_lock_bh(&pool->pool_lock);
 	pool->state = rxe_pool_invalid;
-	spin_unlock_irqrestore(&pool->pool_lock, flags);
+	spin_unlock_bh(&pool->pool_lock);
 
 	num_elem = atomic_read(&pool->num_elem);
 	if (num_elem > 0)
@@ -349,53 +347,48 @@ void rxe_add_key(void *arg, void *key)
 {
 	struct rxe_pool_entry *elem = arg;
 	struct rxe_pool *pool = elem->pool;
-	unsigned long flags;
 
-	spin_lock_irqsave(&pool->pool_lock, flags);
+	spin_lock_bh(&pool->pool_lock);
 	memcpy((u8 *)elem + pool->key_offset, key, pool->key_size);
 	insert_key(pool, elem);
-	spin_unlock_irqrestore(&pool->pool_lock, flags);
+	spin_unlock_bh(&pool->pool_lock);
 }
 
 void rxe_drop_key(void *arg)
 {
 	struct rxe_pool_entry *elem = arg;
 	struct rxe_pool *pool = elem->pool;
-	unsigned long flags;
 
-	spin_lock_irqsave(&pool->pool_lock, flags);
+	spin_lock_bh(&pool->pool_lock);
 	rb_erase(&elem->node, &pool->tree);
-	spin_unlock_irqrestore(&pool->pool_lock, flags);
+	spin_unlock_bh(&pool->pool_lock);
 }
 
 void rxe_add_index(void *arg)
 {
 	struct rxe_pool_entry *elem = arg;
 	struct rxe_pool *pool = elem->pool;
-	unsigned long flags;
 
-	spin_lock_irqsave(&pool->pool_lock, flags);
+	spin_lock_bh(&pool->pool_lock);
 	elem->index = alloc_index(pool);
 	insert_index(pool, elem);
-	spin_unlock_irqrestore(&pool->pool_lock, flags);
+	spin_unlock_bh(&pool->pool_lock);
 }
 
 void rxe_drop_index(void *arg)
 {
 	struct rxe_pool_entry *elem = arg;
 	struct rxe_pool *pool = elem->pool;
-	unsigned long flags;
 
-	spin_lock_irqsave(&pool->pool_lock, flags);
+	spin_lock_bh(&pool->pool_lock);
 	clear_bit(elem->index - pool->min_index, pool->table);
 	rb_erase(&elem->node, &pool->tree);
-	spin_unlock_irqrestore(&pool->pool_lock, flags);
+	spin_unlock_bh(&pool->pool_lock);
 }
 
 void *rxe_alloc(struct rxe_pool *pool)
 {
 	struct rxe_pool_entry *elem;
-	unsigned long flags;
 
 	if (!(pool->flags & RXE_POOL_ATOMIC) &&
 	    (in_irq() || irqs_disabled())) {
@@ -404,13 +397,13 @@ void *rxe_alloc(struct rxe_pool *pool)
 			(int)irqs_disabled());
 	}
 
-	spin_lock_irqsave(&pool->pool_lock, flags);
+	spin_lock_bh(&pool->pool_lock);
 	if (pool->state != rxe_pool_valid) {
-		spin_unlock_irqrestore(&pool->pool_lock, flags);
+		spin_unlock_bh(&pool->pool_lock);
 		return NULL;
 	}
 	kref_get(&pool->ref_cnt);
-	spin_unlock_irqrestore(&pool->pool_lock, flags);
+	spin_unlock_bh(&pool->pool_lock);
 
 	kref_get(&pool->rxe->ref_cnt);
 
@@ -450,9 +443,8 @@ void *rxe_pool_get_index(struct rxe_pool *pool, u32 index)
 {
 	struct rb_node *node = NULL;
 	struct rxe_pool_entry *elem = NULL;
-	unsigned long flags;
 
-	spin_lock_irqsave(&pool->pool_lock, flags);
+	spin_lock_bh(&pool->pool_lock);
 
 	if (pool->state != rxe_pool_valid)
 		goto out;
@@ -474,7 +466,7 @@ void *rxe_pool_get_index(struct rxe_pool *pool, u32 index)
 		kref_get(&elem->ref_cnt);
 
 out:
-	spin_unlock_irqrestore(&pool->pool_lock, flags);
+	spin_unlock_bh(&pool->pool_lock);
 	return node ? (void *)elem : NULL;
 }
 
@@ -483,9 +475,8 @@ void *rxe_pool_get_key(struct rxe_pool *pool, void *key)
 	struct rb_node *node = NULL;
 	struct rxe_pool_entry *elem = NULL;
 	int cmp;
-	unsigned long flags;
 
-	spin_lock_irqsave(&pool->pool_lock, flags);
+	spin_lock_bh(&pool->pool_lock);
 
 	if (pool->state != rxe_pool_valid)
 		goto out;
@@ -510,6 +501,6 @@ void *rxe_pool_get_key(struct rxe_pool *pool, void *key)
 		kref_get(&elem->ref_cnt);
 
 out:
-	spin_unlock_irqrestore(&pool->pool_lock, flags);
+	spin_unlock_bh(&pool->pool_lock);
 	return node ? ((void *)elem) : NULL;
 }
