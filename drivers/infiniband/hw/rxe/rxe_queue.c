@@ -93,8 +93,14 @@ struct rxe_queue *rxe_queue_init(struct rxe_dev *rxe,
 
 	q->rxe = rxe;
 
+	/* used in resize, only need to copy used part of queue */
 	q->elem_size = elem_size;
+
+	/* pad element up to at least a cacheline and always a power of 2 */
+	if (elem_size < cache_line_size())
+		elem_size = cache_line_size();
 	elem_size = roundup_pow_of_two(elem_size);
+
 	q->log2_elem_size = order_base_2(elem_size);
 
 	num_slots = *num_elem + 1;
