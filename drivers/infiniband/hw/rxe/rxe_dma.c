@@ -111,22 +111,6 @@ static void rxe_unmap_sg(struct ib_device *dev,
 	BUG_ON(!valid_dma_direction(direction));
 }
 
-static u64 rxe_sg_dma_address(struct ib_device *dev, struct scatterlist *sg)
-{
-	u64 addr = (uintptr_t)page_address(sg_page(sg));
-
-	if (addr)
-		addr += sg->offset;
-
-	return addr;
-}
-
-static unsigned int rxe_sg_dma_len(struct ib_device *dev,
-				   struct scatterlist *sg)
-{
-	return sg->length;
-}
-
 static void rxe_sync_single_for_cpu(struct ib_device *dev,
 				    u64 addr,
 				    size_t size, enum dma_data_direction dir)
@@ -169,8 +153,6 @@ struct ib_dma_mapping_ops rxe_dma_mapping_ops = {
 	rxe_dma_unmap_page,
 	rxe_map_sg,
 	rxe_unmap_sg,
-	rxe_sg_dma_address,
-	rxe_sg_dma_len,
 	rxe_sync_single_for_cpu,
 	rxe_sync_single_for_device,
 	rxe_dma_alloc_coherent,
