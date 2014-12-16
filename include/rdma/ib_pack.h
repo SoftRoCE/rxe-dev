@@ -101,6 +101,9 @@ enum {
 	IB_OPCODE_ATOMIC_ACKNOWLEDGE                = 0x12,
 	IB_OPCODE_COMPARE_SWAP                      = 0x13,
 	IB_OPCODE_FETCH_ADD                         = 0x14,
+	IB_OPCODE_RESYNC                            = 0x15,
+	IB_OPCODE_SEND_LAST_INV                     = 0x16,
+	IB_OPCODE_SEND_ONLY_INV                     = 0x17,
 
 	/* real constants follow -- see comment about above IB_OPCODE()
 	   macro for more details */
@@ -127,6 +130,8 @@ enum {
 	IB_OPCODE(RC, ATOMIC_ACKNOWLEDGE),
 	IB_OPCODE(RC, COMPARE_SWAP),
 	IB_OPCODE(RC, FETCH_ADD),
+	IB_OPCODE(RC, SEND_LAST_INV),
+	IB_OPCODE(RC, SEND_ONLY_INV),
 
 	/* UC */
 	IB_OPCODE(UC, SEND_FIRST),
@@ -164,6 +169,7 @@ enum {
 	IB_OPCODE(RD, ATOMIC_ACKNOWLEDGE),
 	IB_OPCODE(RD, COMPARE_SWAP),
 	IB_OPCODE(RD, FETCH_ADD),
+	IB_OPCODE(RD, RESYNC),
 
 	/* UD */
 	IB_OPCODE(UD, SEND_ONLY),
