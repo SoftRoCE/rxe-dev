@@ -32,6 +32,7 @@
  */
 
 #include <linux/skbuff.h>
+#include <linux/if_arp.h>
 #include <linux/netdevice.h>
 #include <linux/if.h>
 #include <linux/if_vlan.h>
@@ -440,7 +441,7 @@ static int can_support_rxe(struct net_device *ndev)
 	}
 
 	/* Let's says we support all ethX devices */
-	if (strncmp(ndev->name, "eth", 3) == 0)
+	if (ndev->type == ARPHRD_ETHER)
 		rc = 1;
 
 out:
