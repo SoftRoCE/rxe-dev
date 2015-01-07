@@ -39,6 +39,8 @@
 
 #include <rdma/ib_verbs.h>
 
+extern struct workqueue_struct *roce_gid_mgmt_wq;
+
 int  ib_device_register_sysfs(struct ib_device *device,
 			      int (*port_callback)(struct ib_device *,
 						   u8, struct kobject *));
@@ -53,6 +55,22 @@ void ib_cache_cleanup(void);
 int ib_resolve_eth_l2_attrs(struct ib_qp *qp,
 			    struct ib_qp_attr *qp_attr, int *qp_attr_mask);
 
+typedef void (*roce_netdev_callback)(struct ib_device *device, u8 port,
+	      struct net_device *idev, void *cookie);
+
+typedef int (*roce_netdev_filter)(struct ib_device *device, u8 port,
+	     struct net_device *idev, void *cookie);
+
+void ib_dev_roce_ports_of_netdev(struct ib_device *ib_dev,
+				 roce_netdev_filter filter,
+				 void *filter_cookie,
+				 roce_netdev_callback cb,
+				 void *cookie);
+void ib_enum_roce_ports_of_netdev(roce_netdev_filter filter,
+				  void *filter_cookie,
+				  roce_netdev_callback cb,
+				  void *cookie);
+
 int roce_gid_cache_get_gid(struct ib_device *ib_dev, u8 port, int index,
 			   union ib_gid *gid, struct ib_gid_attr *attr);
 
@@ -66,6 +84,9 @@ int roce_gid_cache_find_gid_by_port(struct ib_device *ib_dev, union ib_gid *gid,
 
 int roce_gid_cache_is_active(struct ib_device *ib_dev, u8 port);
 
+int roce_gid_cache_setup(void);
+void roce_gid_cache_cleanup(void);
+
 int roce_add_gid(struct ib_device *ib_dev, u8 port,
 		 union ib_gid *gid, struct ib_gid_attr *attr);
 
@@ -74,5 +95,10 @@ int roce_del_gid(struct ib_device *ib_dev, u8 port,
 
 int roce_del_all_netdev_gids(struct ib_device *ib_dev, u8 port,
 			     struct net_device *ndev);
+
+int roce_gid_mgmt_init(void);
+void roce_gid_mgmt_cleanup(void);
+
+int roce_rescan_device(struct ib_device *ib_dev);
 
 #endif /* _CORE_PRIV_H */

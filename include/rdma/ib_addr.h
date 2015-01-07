@@ -142,7 +142,7 @@ static inline u16 rdma_vlan_dev_vlan_id(const struct net_device *dev)
 		vlan_dev_vlan_id(dev) : 0xffff;
 }
 
-static inline int rdma_ip2gid(struct sockaddr *addr, union ib_gid *gid)
+static inline int rdma_ip2gid(const struct sockaddr *addr, union ib_gid *gid)
 {
 	switch (addr->sa_family) {
 	case AF_INET:

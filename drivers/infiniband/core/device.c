@@ -39,6 +39,7 @@
 #include <linux/init.h>
 #include <linux/mutex.h>
 #include <rdma/rdma_netlink.h>
+#include <rdma/ib_addr.h>
 
 #include "core_priv.h"
 
@@ -640,6 +641,82 @@ int ib_query_gid(struct ib_device *device,
 EXPORT_SYMBOL(ib_query_gid);
 
 /**
+ * ib_dev_roce_ports_of_netdev - enumerate RoCE ports of ibdev in
+ *				 respect of netdev
+ * @ib_dev : IB device we want to query
+ * @filter: Should we call the callback?
+ * @filter_cookie: Cookie passed to filter
+ * @cb: Callback to call for each found RoCE ports
+ * @cookie: Cookie passed back to the callback
+ *
+ * Enumerates all of the physical RoCE ports of ib_dev RoCE ports
+ * which are relaying Ethernet packets to a specific
+ * (possibly virtual) netdevice according to filter.
+ */
+void ib_dev_roce_ports_of_netdev(struct ib_device *ib_dev,
+				 roce_netdev_filter filter,
+				 void *filter_cookie,
+				 roce_netdev_callback cb,
+				 void *cookie)
+{
+	u8 port;
+
+	if (ib_dev->modify_gid)
+		for (port = start_port(ib_dev); port <= end_port(ib_dev);
+		     port++)
+			if (ib_dev->get_link_layer(ib_dev, port) ==
+			    IB_LINK_LAYER_ETHERNET) {
+				struct net_device *idev = NULL;
+
+				rcu_read_lock();
+				if (ib_dev->get_netdev)
+					idev = ib_dev->get_netdev(ib_dev, port);
+
+				if (idev &&
+				    idev->reg_state >= NETREG_UNREGISTERED)
+					idev = NULL;
+
+				if (idev)
+					dev_hold(idev);
+
+				rcu_read_unlock();
+
+				if (filter(ib_dev, port, idev, filter_cookie))
+					cb(ib_dev, port, idev, cookie);
+
+				if (idev)
+					dev_put(idev);
+			}
+}
+
+/**
+ * ib_enum_roce_ports_of_netdev - enumerate RoCE ports of a netdev
+ * @filter: Should we call the callback?
+ * @filter_cookie: Cookie passed to filter
+ * @cb: Callback to call for each found RoCE ports
+ * @cookie: Cookie passed back to the callback
+ *
+ * Enumerates all of the physical RoCE ports which are relaying
+ * Ethernet packets to a specific (possibly virtual) netdevice
+ * according to filter.
+ */
+void ib_enum_roce_ports_of_netdev(roce_netdev_filter filter,
+				  void *filter_cookie,
+				  roce_netdev_callback cb,
+				  void *cookie)
+{
+	struct ib_device *dev;
+
+	mutex_lock(&device_mutex);
+
+	list_for_each_entry(dev, &device_list, core_list)
+		ib_dev_roce_ports_of_netdev(dev, filter, filter_cookie, cb,
+					    cookie);
+
+	mutex_unlock(&device_mutex);
+}
+
+/**
  * ib_query_pkey - Get P_Key table entry
  * @device:Device to query
  * @port_num:Port number to query
@@ -794,6 +871,8 @@ static int __init ib_core_init(void)
 		goto err_sysfs;
 	}
 
+	roce_gid_cache_setup();
+
 	ret = ib_cache_setup();
 	if (ret) {
 		printk(KERN_WARNING "Couldn't set up InfiniBand P_Key/GID cache\n");
@@ -815,6 +894,7 @@ err:
 
 static void __exit ib_core_cleanup(void)
 {
+	roce_gid_cache_cleanup();
 	ib_cache_cleanup();
 	ibnl_cleanup();
 	ib_sysfs_cleanup();
