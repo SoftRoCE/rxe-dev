@@ -35,6 +35,7 @@
 
 #include <linux/list.h>
 #include <linux/spinlock.h>
+#include <net/net_namespace.h>
 
 #include <rdma/ib_verbs.h>
 
@@ -51,4 +52,27 @@ void ib_cache_cleanup(void);
 
 int ib_resolve_eth_l2_attrs(struct ib_qp *qp,
 			    struct ib_qp_attr *qp_attr, int *qp_attr_mask);
+
+int roce_gid_cache_get_gid(struct ib_device *ib_dev, u8 port, int index,
+			   union ib_gid *gid, struct ib_gid_attr *attr);
+
+int roce_gid_cache_find_gid(struct ib_device *ib_dev, union ib_gid *gid,
+			    enum ib_gid_type gid_type, struct net *net,
+			    int if_index, u8 *port, u16 *index);
+
+int roce_gid_cache_find_gid_by_port(struct ib_device *ib_dev, union ib_gid *gid,
+				    enum ib_gid_type gid_type, u8 port,
+				    struct net *net, int if_index, u16 *index);
+
+int roce_gid_cache_is_active(struct ib_device *ib_dev, u8 port);
+
+int roce_add_gid(struct ib_device *ib_dev, u8 port,
+		 union ib_gid *gid, struct ib_gid_attr *attr);
+
+int roce_del_gid(struct ib_device *ib_dev, u8 port,
+		 union ib_gid *gid, struct ib_gid_attr *attr);
+
+int roce_del_all_netdev_gids(struct ib_device *ib_dev, u8 port,
+			     struct net_device *ndev);
+
 #endif /* _CORE_PRIV_H */
