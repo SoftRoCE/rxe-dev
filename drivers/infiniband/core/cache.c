@@ -42,6 +42,8 @@
 
 #include "core_priv.h"
 
+#define __IB_ONLY
+
 struct ib_pkey_cache {
 	int             table_len;
 	u16             table[0];
@@ -69,67 +71,214 @@ static inline int end_port(struct ib_device *device)
 		0 : device->phys_port_cnt;
 }
 
-int ib_get_cached_gid(struct ib_device *device,
-		      u8                port_num,
-		      int               index,
-		      union ib_gid     *gid)
+static int __IB_ONLY __ib_get_cached_gid(struct ib_device *device,
+					 u8                port_num,
+					 int               index,
+					 union ib_gid     *gid)
 {
 	struct ib_gid_cache *cache;
 	unsigned long flags;
-	int ret = 0;
+	int ret = -ENOENT;
 
 	if (port_num < start_port(device) || port_num > end_port(device))
 		return -EINVAL;
+	if (!device->cache.gid_cache)
+		return -ENOENT;
 
 	read_lock_irqsave(&device->cache.lock, flags);
 
 	cache = device->cache.gid_cache[port_num - start_port(device)];
-
-	if (index < 0 || index >= cache->table_len)
-		ret = -EINVAL;
-	else
+	if (cache && index >= 0 && index < cache->table_len) {
 		*gid = cache->table[index];
+		ret = 0;
+	}
 
 	read_unlock_irqrestore(&device->cache.lock, flags);
+	return ret;
+}
+
+int ib_cache_use_roce_gid_cache(struct ib_device *device, u8 port_num)
+{
+	if (rdma_port_get_link_layer(device, port_num) ==
+	    IB_LINK_LAYER_ETHERNET) {
+		if (device->cache.roce_gid_cache)
+			return 0;
+		else
+			return -EAGAIN;
+	}
+
+	return -EINVAL;
+}
+EXPORT_SYMBOL(ib_cache_use_roce_gid_cache);
+
+int ib_get_cached_gid(struct ib_device *device,
+		      u8                port_num,
+		      int               index,
+		      union ib_gid     *gid,
+		      struct ib_gid_attr *attr)
+{
+	int ret;
+
+	if (port_num < start_port(device) || port_num > end_port(device))
+		return -EINVAL;
+
+	ret = ib_cache_use_roce_gid_cache(device, port_num);
+	if (!ret)
+		return roce_gid_cache_get_gid(device, port_num, index, gid,
+					      attr);
+
+	if (ret == -EAGAIN)
+		return ret;
+
+	ret = __ib_get_cached_gid(device, port_num, index, gid);
+
+	if (!ret && attr) {
+		memset(attr, 0, sizeof(*attr));
+		attr->gid_type = IB_GID_TYPE_IB;
+	}
 
 	return ret;
 }
 EXPORT_SYMBOL(ib_get_cached_gid);
 
-int ib_find_cached_gid(struct ib_device *device,
-		       union ib_gid	*gid,
-		       u8               *port_num,
-		       u16              *index)
+static int __IB_ONLY ___ib_find_cached_gid_by_port(struct ib_device *device,
+						   u8               port_num,
+						   const union ib_gid *gid,
+						   u16              *index)
 {
 	struct ib_gid_cache *cache;
-	unsigned long flags;
-	int p, i;
-	int ret = -ENOENT;
+	u8 p = port_num - start_port(device);
+	int i;
 
-	*port_num = -1;
+	if (port_num < start_port(device) || port_num > end_port(device))
+		return -EINVAL;
+	if (!ib_cache_use_roce_gid_cache(device, port_num))
+		return -ENOSYS;
+	if (!device->cache.gid_cache)
+		return -ENOENT;
+
+	cache = device->cache.gid_cache[p];
+	if (!cache)
+		return -ENOENT;
+
+	for (i = 0; i < cache->table_len; ++i) {
+		if (!memcmp(gid, &cache->table[i], sizeof(*gid))) {
+			if (index)
+				*index = i;
+			return 0;
+		}
+	}
+
+	return -ENOENT;
+}
+
+static int __IB_ONLY __ib_find_cached_gid_by_port(struct ib_device *device,
+						  u8		    port_num,
+						  union ib_gid     *gid,
+						  u16              *index)
+{
+	unsigned long flags;
+	u16 found_index;
+	int ret;
+
 	if (index)
 		*index = -1;
 
 	read_lock_irqsave(&device->cache.lock, flags);
 
-	for (p = 0; p <= end_port(device) - start_port(device); ++p) {
-		cache = device->cache.gid_cache[p];
-		for (i = 0; i < cache->table_len; ++i) {
-			if (!memcmp(gid, &cache->table[i], sizeof *gid)) {
-				*port_num = p + start_port(device);
-				if (index)
-					*index = i;
-				ret = 0;
-				goto found;
-			}
+	ret = ___ib_find_cached_gid_by_port(device, port_num, gid,
+					    &found_index);
+
+	read_unlock_irqrestore(&device->cache.lock, flags);
+
+	if (!ret && index)
+		*index = found_index;
+
+	return ret;
+}
+
+static int __IB_ONLY __ib_find_cached_gid(struct ib_device *device,
+					  union ib_gid     *gid,
+					  u8               *port_num,
+					  u16              *index)
+{
+	unsigned long flags;
+	u16 found_index;
+	int p;
+	int ret = -ENOENT;
+
+	if (port_num)
+		*port_num = -1;
+	if (index)
+		*index = -1;
+
+	read_lock_irqsave(&device->cache.lock, flags);
+
+	for (p = start_port(device); p <= end_port(device); ++p) {
+		if (!___ib_find_cached_gid_by_port(device, p, gid,
+						   &found_index)) {
+			if (port_num)
+				*port_num = p;
+			ret = 0;
+			break;
 		}
 	}
-found:
+
 	read_unlock_irqrestore(&device->cache.lock, flags);
+
+	if (!ret && index)
+		*index = found_index;
+
+	return ret;
+}
+
+int ib_find_cached_gid(struct ib_device *device,
+		       union ib_gid	*gid,
+		       enum ib_gid_type gid_type,
+		       struct net	*net,
+		       int		if_index,
+		       u8               *port_num,
+		       u16              *index)
+{
+	int ret = -ENOENT;
+
+	/* Look for a RoCE device with the specified GID. */
+	if (device->cache.roce_gid_cache)
+		ret = roce_gid_cache_find_gid(device, gid, gid_type, net,
+					      if_index, port_num, index);
+
+	/* If no RoCE devices with the specified GID, look for IB device. */
+	if (ret && gid_type == IB_GID_TYPE_IB)
+		ret =  __ib_find_cached_gid(device, gid, port_num, index);
 
 	return ret;
 }
 EXPORT_SYMBOL(ib_find_cached_gid);
+
+int ib_find_cached_gid_by_port(struct ib_device *device,
+			       union ib_gid	*gid,
+			       enum ib_gid_type gid_type,
+			       u8               port_num,
+			       struct net	*net,
+			       int		if_index,
+			       u16              *index)
+{
+	int ret = -ENOENT;
+
+	/* Look for a RoCE device with the specified GID. */
+	if (!ib_cache_use_roce_gid_cache(device, port_num))
+		return roce_gid_cache_find_gid_by_port(device, gid, gid_type,
+						       port_num, net, if_index,
+						       index);
+
+	/* If no RoCE devices with the specified GID, look for IB device. */
+	if (gid_type == IB_GID_TYPE_IB)
+		ret = __ib_find_cached_gid_by_port(device, port_num,
+						   gid, index);
+
+	return ret;
+}
+EXPORT_SYMBOL(ib_find_cached_gid_by_port);
 
 int ib_get_cached_pkey(struct ib_device *device,
 		       u8                port_num,
@@ -138,22 +287,23 @@ int ib_get_cached_pkey(struct ib_device *device,
 {
 	struct ib_pkey_cache *cache;
 	unsigned long flags;
-	int ret = 0;
+	int ret = -ENOENT;
 
 	if (port_num < start_port(device) || port_num > end_port(device))
 		return -EINVAL;
 
+	if (!device->cache.pkey_cache)
+		return -ENOENT;
+
 	read_lock_irqsave(&device->cache.lock, flags);
 
 	cache = device->cache.pkey_cache[port_num - start_port(device)];
-
-	if (index < 0 || index >= cache->table_len)
-		ret = -EINVAL;
-	else
+	if (cache && index >= 0 && index < cache->table_len) {
 		*pkey = cache->table[index];
+		ret = 0;
+	}
 
 	read_unlock_irqrestore(&device->cache.lock, flags);
-
 	return ret;
 }
 EXPORT_SYMBOL(ib_get_cached_pkey);
@@ -172,9 +322,14 @@ int ib_find_cached_pkey(struct ib_device *device,
 	if (port_num < start_port(device) || port_num > end_port(device))
 		return -EINVAL;
 
+	if (!device->cache.pkey_cache)
+		return -ENOENT;
+
 	read_lock_irqsave(&device->cache.lock, flags);
 
 	cache = device->cache.pkey_cache[port_num - start_port(device)];
+	if (!cache)
+		goto out;
 
 	*index = -1;
 
@@ -193,8 +348,8 @@ int ib_find_cached_pkey(struct ib_device *device,
 		ret = 0;
 	}
 
+out:
 	read_unlock_irqrestore(&device->cache.lock, flags);
-
 	return ret;
 }
 EXPORT_SYMBOL(ib_find_cached_pkey);
@@ -212,9 +367,14 @@ int ib_find_exact_cached_pkey(struct ib_device *device,
 	if (port_num < start_port(device) || port_num > end_port(device))
 		return -EINVAL;
 
+	if (!device->cache.pkey_cache)
+		return -ENOENT;
+
 	read_lock_irqsave(&device->cache.lock, flags);
 
 	cache = device->cache.pkey_cache[port_num - start_port(device)];
+	if (!cache)
+		goto out;
 
 	*index = -1;
 
@@ -224,9 +384,8 @@ int ib_find_exact_cached_pkey(struct ib_device *device,
 			ret = 0;
 			break;
 		}
-
+out:
 	read_unlock_irqrestore(&device->cache.lock, flags);
-
 	return ret;
 }
 EXPORT_SYMBOL(ib_find_exact_cached_pkey);
@@ -236,13 +395,16 @@ int ib_get_cached_lmc(struct ib_device *device,
 		      u8                *lmc)
 {
 	unsigned long flags;
-	int ret = 0;
+	int ret = -ENOENT;
 
 	if (port_num < start_port(device) || port_num > end_port(device))
 		return -EINVAL;
 
 	read_lock_irqsave(&device->cache.lock, flags);
-	*lmc = device->cache.lmc_cache[port_num - start_port(device)];
+	if (device->cache.lmc_cache) {
+		*lmc = device->cache.lmc_cache[port_num - start_port(device)];
+		ret = 0;
+	}
 	read_unlock_irqrestore(&device->cache.lock, flags);
 
 	return ret;
@@ -254,9 +416,19 @@ static void ib_cache_update(struct ib_device *device,
 {
 	struct ib_port_attr       *tprops = NULL;
 	struct ib_pkey_cache      *pkey_cache = NULL, *old_pkey_cache;
-	struct ib_gid_cache       *gid_cache = NULL, *old_gid_cache;
+	struct ib_gid_cache       *gid_cache = NULL, *old_gid_cache = NULL;
 	int                        i;
 	int                        ret;
+	bool			   use_roce_gid_cache =
+					!ib_cache_use_roce_gid_cache(device,
+								     port);
+
+	if (port < start_port(device) || port > end_port(device))
+		return;
+
+	if (!(device->cache.pkey_cache && device->cache.gid_cache &&
+	      device->cache.lmc_cache))
+		return;
 
 	tprops = kmalloc(sizeof *tprops, GFP_KERNEL);
 	if (!tprops)
@@ -276,12 +448,14 @@ static void ib_cache_update(struct ib_device *device,
 
 	pkey_cache->table_len = tprops->pkey_tbl_len;
 
-	gid_cache = kmalloc(sizeof *gid_cache + tprops->gid_tbl_len *
-			    sizeof *gid_cache->table, GFP_KERNEL);
-	if (!gid_cache)
-		goto err;
+	if (!use_roce_gid_cache) {
+		gid_cache = kmalloc(sizeof(*gid_cache) + tprops->gid_tbl_len *
+			    sizeof(*gid_cache->table), GFP_KERNEL);
+		if (!gid_cache)
+			goto err;
 
-	gid_cache->table_len = tprops->gid_tbl_len;
+		gid_cache->table_len = tprops->gid_tbl_len;
+	}
 
 	for (i = 0; i < pkey_cache->table_len; ++i) {
 		ret = ib_query_pkey(device, port, i, pkey_cache->table + i);
@@ -292,22 +466,28 @@ static void ib_cache_update(struct ib_device *device,
 		}
 	}
 
-	for (i = 0; i < gid_cache->table_len; ++i) {
-		ret = ib_query_gid(device, port, i, gid_cache->table + i);
-		if (ret) {
-			printk(KERN_WARNING "ib_query_gid failed (%d) for %s (index %d)\n",
-			       ret, device->name, i);
-			goto err;
+	if (!use_roce_gid_cache) {
+		for (i = 0;  i < gid_cache->table_len; ++i) {
+			ret = ib_query_gid(device, port, i,
+					   gid_cache->table + i, NULL);
+			if (ret) {
+				printk(KERN_WARNING "ib_query_gid failed (%d) for %s (index %d)\n",
+				       ret, device->name, i);
+				goto err;
+			}
 		}
 	}
 
 	write_lock_irq(&device->cache.lock);
 
 	old_pkey_cache = device->cache.pkey_cache[port - start_port(device)];
-	old_gid_cache  = device->cache.gid_cache [port - start_port(device)];
+	if (!use_roce_gid_cache)
+		old_gid_cache  =
+			device->cache.gid_cache[port - start_port(device)];
 
 	device->cache.pkey_cache[port - start_port(device)] = pkey_cache;
-	device->cache.gid_cache [port - start_port(device)] = gid_cache;
+	if (!use_roce_gid_cache)
+		device->cache.gid_cache[port - start_port(device)] = gid_cache;
 
 	device->cache.lmc_cache[port - start_port(device)] = tprops->lmc;
 
@@ -403,11 +583,18 @@ err:
 	kfree(device->cache.pkey_cache);
 	kfree(device->cache.gid_cache);
 	kfree(device->cache.lmc_cache);
+	device->cache.pkey_cache = NULL;
+	device->cache.gid_cache = NULL;
+	device->cache.lmc_cache = NULL;
 }
 
 static void ib_cache_cleanup_one(struct ib_device *device)
 {
 	int p;
+
+	if (!(device->cache.pkey_cache && device->cache.gid_cache &&
+	      device->cache.lmc_cache))
+		return;
 
 	ib_unregister_event_handler(&device->cache.event_handler);
 	flush_workqueue(ib_wq);

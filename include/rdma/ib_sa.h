@@ -156,7 +156,9 @@ struct ib_sa_path_rec {
 	u8           preference;
 	u8           smac[ETH_ALEN];
 	u8           dmac[ETH_ALEN];
-	u16	     vlan_id;
+	u16          vlan_id;
+	int	     ifindex;
+	struct net  *net;
 };
 
 #define IB_SA_MCMEMBER_REC_MGID				IB_SA_COMP_MASK( 0)
