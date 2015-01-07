@@ -356,7 +356,7 @@ static int cma_acquire_dev(struct rdma_id_private *id_priv,
 	struct cma_device *cma_dev;
 	union ib_gid gid, iboe_gid;
 	int ret = -ENODEV;
-	u8 port, found_port;
+	u8 port;
 	enum rdma_link_layer dev_ll = dev_addr->dev_type == ARPHRD_INFINIBAND ?
 		IB_LINK_LAYER_INFINIBAND : IB_LINK_LAYER_ETHERNET;
 
@@ -375,16 +375,28 @@ static int cma_acquire_dev(struct rdma_id_private *id_priv,
 				     listen_id_priv->id.port_num) == dev_ll) {
 		cma_dev = listen_id_priv->cma_dev;
 		port = listen_id_priv->id.port_num;
-		if (rdma_node_get_transport(cma_dev->device->node_type) == RDMA_TRANSPORT_IB &&
-		    rdma_port_get_link_layer(cma_dev->device, port) == IB_LINK_LAYER_ETHERNET)
-			ret = ib_find_cached_gid(cma_dev->device, &iboe_gid,
-						 &found_port, NULL);
-		else
-			ret = ib_find_cached_gid(cma_dev->device, &gid,
-						 &found_port, NULL);
+		if (rdma_node_get_transport(cma_dev->device->node_type) ==
+		    RDMA_TRANSPORT_IB &&
+		    rdma_port_get_link_layer(cma_dev->device, port) ==
+		    IB_LINK_LAYER_ETHERNET) {
+			int if_index =
+				id_priv->id.route.addr.dev_addr.bound_dev_if;
 
-		if (!ret && (port  == found_port)) {
-			id_priv->id.port_num = found_port;
+			ret = ib_find_cached_gid_by_port(cma_dev->device,
+							 &iboe_gid,
+							 IB_GID_TYPE_IB,
+							 port,
+							 &init_net,
+							 if_index,
+							 NULL);
+		} else {
+			ret = ib_find_cached_gid_by_port(cma_dev->device, &gid,
+							 IB_GID_TYPE_IB, port,
+							 NULL, 0, NULL);
+		}
+
+		if (!ret) {
+			id_priv->id.port_num = port;
 			goto out;
 		}
 	}
@@ -394,15 +406,34 @@ static int cma_acquire_dev(struct rdma_id_private *id_priv,
 			    listen_id_priv->cma_dev == cma_dev &&
 			    listen_id_priv->id.port_num == port)
 				continue;
-			if (rdma_port_get_link_layer(cma_dev->device, port) == dev_ll) {
-				if (rdma_node_get_transport(cma_dev->device->node_type) == RDMA_TRANSPORT_IB &&
-				    rdma_port_get_link_layer(cma_dev->device, port) == IB_LINK_LAYER_ETHERNET)
-					ret = ib_find_cached_gid(cma_dev->device, &iboe_gid, &found_port, NULL);
-				else
-					ret = ib_find_cached_gid(cma_dev->device, &gid, &found_port, NULL);
+			if (rdma_port_get_link_layer(cma_dev->device, port) ==
+			    dev_ll) {
+				if (rdma_node_get_transport(cma_dev->device->node_type) ==
+				    RDMA_TRANSPORT_IB &&
+				    rdma_port_get_link_layer(cma_dev->device, port) ==
+				    IB_LINK_LAYER_ETHERNET) {
+					int if_index =
+						id_priv->id.route.addr.dev_addr.bound_dev_if;
 
-				if (!ret && (port == found_port)) {
-					id_priv->id.port_num = found_port;
+					ret = ib_find_cached_gid_by_port(cma_dev->device,
+									 &iboe_gid,
+									 IB_GID_TYPE_IB,
+									 port,
+									 &init_net,
+									 if_index,
+									 NULL);
+				} else {
+					ret = ib_find_cached_gid_by_port(cma_dev->device,
+									 &gid,
+									 IB_GID_TYPE_IB,
+									 port,
+									 NULL,
+									 0,
+									 NULL);
+				}
+
+				if (!ret) {
+					id_priv->id.port_num = port;
 					goto out;
 				}
 			}
@@ -442,7 +473,9 @@ static int cma_resolve_ib_dev(struct rdma_id_private *id_priv)
 			if (ib_find_cached_pkey(cur_dev->device, p, pkey, &index))
 				continue;
 
-			for (i = 0; !ib_get_cached_gid(cur_dev->device, p, i, &gid); i++) {
+			for (i = 0; !ib_get_cached_gid(cur_dev->device, p, i,
+						       &gid, NULL);
+			     i++) {
 				if (!memcmp(&gid, dgid, sizeof(gid))) {
 					cma_dev = cur_dev;
 					sgid = gid;
@@ -629,7 +662,7 @@ static int cma_modify_qp_rtr(struct rdma_id_private *id_priv,
 		goto out;
 
 	ret = ib_query_gid(id_priv->id.device, id_priv->id.port_num,
-			   qp_attr.ah_attr.grh.sgid_index, &sgid);
+			   qp_attr.ah_attr.grh.sgid_index, &sgid, NULL);
 	if (ret)
 		goto out;
 
@@ -1908,16 +1941,17 @@ static int cma_resolve_iboe_route(struct rdma_id_private *id_priv)
 
 	route->num_paths = 1;
 
-	if (addr->dev_addr.bound_dev_if)
+	if (addr->dev_addr.bound_dev_if) {
 		ndev = dev_get_by_index(&init_net, addr->dev_addr.bound_dev_if);
+		route->path_rec->net = &init_net;
+		route->path_rec->ifindex = addr->dev_addr.bound_dev_if;
+	}
 	if (!ndev) {
 		ret = -ENODEV;
 		goto err2;
 	}
 
-	route->path_rec->vlan_id = rdma_vlan_dev_vlan_id(ndev);
 	memcpy(route->path_rec->dmac, addr->dev_addr.dst_dev_addr, ETH_ALEN);
-	memcpy(route->path_rec->smac, ndev->dev_addr, ndev->addr_len);
 
 	rdma_ip2gid((struct sockaddr *)&id_priv->id.route.addr.src_addr,
 		    &route->path_rec->sgid);
@@ -2051,7 +2085,7 @@ static int cma_bind_loopback(struct rdma_id_private *id_priv)
 	p = 1;
 
 port_found:
-	ret = ib_get_cached_gid(cma_dev->device, p, 0, &gid);
+	ret = ib_get_cached_gid(cma_dev->device, p, 0, &gid, NULL);
 	if (ret)
 		goto out;
 

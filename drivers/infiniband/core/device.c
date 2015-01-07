@@ -40,6 +40,7 @@
 #include <linux/mutex.h>
 #include <rdma/rdma_netlink.h>
 #include <rdma/ib_addr.h>
+#include <rdma/ib_cache.h>
 
 #include "core_priv.h"
 
@@ -630,12 +631,21 @@ EXPORT_SYMBOL(ib_query_port);
  * @port_num:Port number to query
  * @index:GID table index to query
  * @gid:Returned GID
+ * @attr: Returned GID's attribute (only in RoCE)
  *
  * ib_query_gid() fetches the specified GID table entry.
  */
 int ib_query_gid(struct ib_device *device,
-		 u8 port_num, int index, union ib_gid *gid)
+		 u8 port_num, int index, union ib_gid *gid,
+		 struct ib_gid_attr *attr)
 {
+	if (!ib_cache_use_roce_gid_cache(device, port_num))
+		return roce_gid_cache_get_gid(device, port_num, index, gid,
+					      attr);
+
+	if (attr)
+		return -EINVAL;
+
 	return device->query_gid(device, port_num, index, gid);
 }
 EXPORT_SYMBOL(ib_query_gid);
@@ -784,19 +794,32 @@ EXPORT_SYMBOL(ib_modify_port);
  *   a specified GID value occurs.
  * @device: The device to query.
  * @gid: The GID value to search for.
+ * @gid_type: Type of GID.
+ * @net: The namespace to search this GID in (RoCE only).
+ *	 Valid only if if_index != 0.
+ * @if_index: The if_index assigned with this GID (RoCE only).
  * @port_num: The port number of the device where the GID value was found.
  * @index: The index into the GID table where the GID was found.  This
  *   parameter may be NULL.
  */
 int ib_find_gid(struct ib_device *device, union ib_gid *gid,
-		u8 *port_num, u16 *index)
+		enum ib_gid_type gid_type, struct net *net,
+		int if_index, u8 *port_num, u16 *index)
 {
 	union ib_gid tmp_gid;
 	int ret, port, i;
 
+	if (device->cache.roce_gid_cache &&
+	    !roce_gid_cache_find_gid(device, gid, gid_type, net, if_index,
+				     port_num, index))
+		return 0;
+
 	for (port = start_port(device); port <= end_port(device); ++port) {
+		if (!ib_cache_use_roce_gid_cache(device, port))
+			continue;
+
 		for (i = 0; i < device->gid_tbl_len[port - start_port(device)]; ++i) {
-			ret = ib_query_gid(device, port, i, &tmp_gid);
+			ret = ib_query_gid(device, port, i, &tmp_gid, NULL);
 			if (ret)
 				return ret;
 			if (!memcmp(&tmp_gid, gid, sizeof *gid)) {

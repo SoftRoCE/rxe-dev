@@ -1791,7 +1791,7 @@ static inline int rcv_has_same_gid(struct ib_mad_agent_private *mad_agent_priv,
 					  ((1 << lmc) - 1)));
 		} else {
 			if (ib_get_cached_gid(device, port_num,
-					      attr.grh.sgid_index, &sgid))
+					      attr.grh.sgid_index, &sgid, NULL))
 				return 0;
 			return !memcmp(sgid.raw, rwc->recv_buf.grh->dgid.raw,
 				       16);
