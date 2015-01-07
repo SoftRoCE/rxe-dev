@@ -516,3 +516,71 @@ int roce_gid_cache_is_active(struct ib_device *ib_dev, u8 port)
 	return ib_dev->cache.roce_gid_cache &&
 		ib_dev->cache.roce_gid_cache[port - start_port(ib_dev)]->active;
 }
+
+static void roce_gid_cache_client_setup_one(struct ib_device *ib_dev)
+{
+	if (!roce_gid_cache_setup_one(ib_dev)) {
+		roce_gid_cache_set_active_state(ib_dev, 1);
+		if (roce_rescan_device(ib_dev)) {
+			roce_gid_cache_set_active_state(ib_dev, 0);
+			roce_gid_cache_cleanup_one(ib_dev);
+		}
+	}
+}
+
+static void roce_gid_cache_client_cleanup_work_handler(struct work_struct *work)
+{
+	struct ib_cache *ib_cache = container_of(work, struct ib_cache,
+						 roce_gid_cache_cleanup_work);
+	struct ib_device *ib_dev = container_of(ib_cache, struct ib_device,
+						cache);
+
+	/* Make sure no gid update task is still referencing this device */
+	flush_workqueue(roce_gid_mgmt_wq);
+
+	/* No need to flush the system wq, even though we use it in
+	 * roce_rescan_device because we are guarenteed to run this
+	 * on the system_wq after roce_rescan_device.
+	 */
+
+	roce_gid_cache_cleanup_one(ib_dev);
+	ib_device_put(ib_dev);
+}
+
+static void roce_gid_cache_client_cleanup_one_work(struct ib_device *ib_dev)
+{
+	ib_device_hold(ib_dev);
+	INIT_WORK(&ib_dev->cache.roce_gid_cache_cleanup_work,
+		  roce_gid_cache_client_cleanup_work_handler);
+	schedule_work(&ib_dev->cache.roce_gid_cache_cleanup_work);
+}
+
+static void roce_gid_cache_client_cleanup_one(struct ib_device *ib_dev)
+{
+	roce_gid_cache_set_active_state(ib_dev, 0);
+	roce_gid_cache_client_cleanup_one_work(ib_dev);
+}
+
+static struct ib_client cache_client = {
+	.name   = "roce_gid_cache",
+	.add    = roce_gid_cache_client_setup_one,
+	.remove = roce_gid_cache_client_cleanup_one
+};
+
+int __init roce_gid_cache_setup(void)
+{
+	roce_gid_mgmt_init();
+
+	return ib_register_client(&cache_client);
+}
+
+void __exit roce_gid_cache_cleanup(void)
+{
+	ib_unregister_client(&cache_client);
+
+	roce_gid_mgmt_cleanup();
+
+	flush_workqueue(system_wq);
+
+	rcu_barrier();
+}

@@ -1465,6 +1465,7 @@ struct ib_cache {
 	struct ib_gid_cache   **gid_cache;
 	u8                     *lmc_cache;
 	struct ib_roce_gid_cache **roce_gid_cache;
+	struct work_struct	roce_gid_cache_cleanup_work;
 };
 
 struct ib_dma_mapping_ops {
@@ -1537,6 +1538,14 @@ struct ib_device {
 						 struct ib_port_attr *port_attr);
 	enum rdma_link_layer	   (*get_link_layer)(struct ib_device *device,
 						     u8 port_num);
+	/* When calling get_netdev, the HW vendor's driver should return the
+	 * net device of device @device at port @port_num. The function
+	 * is called in rtnl_lock. The HW vendor's device driver must guarantee
+	 * to return NULL before the net device has reached
+	 * NETDEV_UNREGISTER_FINAL state.
+	 */
+	struct net_device	  *(*get_netdev)(struct ib_device *device,
+						 u8 port_num);
 	int		           (*query_gid)(struct ib_device *device,
 						u8 port_num, int index,
 						union ib_gid *gid);
