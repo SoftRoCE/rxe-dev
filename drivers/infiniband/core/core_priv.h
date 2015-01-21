@@ -84,6 +84,16 @@ int roce_gid_cache_find_gid_by_port(struct ib_device *ib_dev, union ib_gid *gid,
 
 int roce_gid_cache_is_active(struct ib_device *ib_dev, u8 port);
 
+enum roce_gid_cache_default_mode {
+	ROCE_GID_CACHE_DEFAULT_MODE_SET,
+	ROCE_GID_CACHE_DEFAULT_MODE_DELETE
+};
+
+void roce_gid_cache_set_default_gid(struct ib_device *ib_dev, u8 port,
+				    struct net_device *ndev,
+				    unsigned long gid_type_mask,
+				    enum roce_gid_cache_default_mode mode);
+
 int roce_gid_cache_setup(void);
 void roce_gid_cache_cleanup(void);
 
@@ -100,5 +110,7 @@ int roce_gid_mgmt_init(void);
 void roce_gid_mgmt_cleanup(void);
 
 int roce_rescan_device(struct ib_device *ib_dev);
+unsigned long roce_gid_type_mask_support(struct ib_device *ib_dev, u8 port);
+
 
 #endif /* _CORE_PRIV_H */
