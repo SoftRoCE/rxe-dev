@@ -51,11 +51,6 @@ static int rxe_eth_proto_id = ETH_P_RXE;
 module_param_named(eth_proto_id, rxe_eth_proto_id, int, 0644);
 MODULE_PARM_DESC(eth_proto_id, "Ethernet protocol ID (default/correct=0x8915)");
 
-static int rxe_xmit_shortcut;
-module_param_named(xmit_shortcut, rxe_xmit_shortcut, int, 0644);
-MODULE_PARM_DESC(xmit_shortcut,
-		 "Shortcut transmit (EXPERIMENTAL)");
-
 static int rxe_loopback_mad_grh_fix = 1;
 module_param_named(loopback_mad_grh_fix, rxe_loopback_mad_grh_fix, int, 0644);
 MODULE_PARM_DESC(loopback_mad_grh_fix, "Allow MADs to self without GRH");
@@ -187,10 +182,7 @@ static inline int queue_deactivated(struct sk_buff *skb)
 
 static int send_finish(struct sk_buff *skb)
 {
-	if (!rxe_xmit_shortcut)
-		return dev_queue_xmit(skb);
-	else
-		return skb->dev->netdev_ops->ndo_start_xmit(skb, skb->dev);
+	return dev_queue_xmit(skb);
 }
 
 static int send(struct rxe_dev *rxe, struct sk_buff *skb)
