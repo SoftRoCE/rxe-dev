@@ -94,12 +94,6 @@ module_param_named(fast_arb, rxe_fast_arb, int, 0644);
 MODULE_PARM_DESC(fast_arb,
 		 "enable fast path call to arbiter (0=no, 1=no int context, 2=any context)");
 
-int rxe_crc_disable;
-EXPORT_SYMBOL(rxe_crc_disable);
-module_param_named(crc_disable, rxe_crc_disable, int, 0644);
-MODULE_PARM_DESC(rxe_crc_disable,
-		 "Disable crc32 computation on outbound packets");
-
 int rxe_nsec_per_packet = 200;
 module_param_named(nsec_per_packet, rxe_nsec_per_packet, int, 0644);
 MODULE_PARM_DESC(nsec_per_packet,

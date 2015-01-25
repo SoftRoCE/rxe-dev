@@ -204,8 +204,6 @@ static int __init rxe_sample_init(void)
 {
 	int err;
 
-	rxe_crc_disable = 1;
-
 	my_class = class_create(THIS_MODULE, "foo");
 	my_dev = device_create(my_class, NULL, 0, NULL, "bar");
 

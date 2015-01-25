@@ -517,15 +517,13 @@ static int fill_packet(struct rxe_qp *qp, struct rxe_send_wqe *wqe,
 	u32 crc = 0;
 	u8 *p;
 
-	if (!rxe_crc_disable)
-		crc = rxe_icrc_hdr(pkt);
+	crc = rxe_icrc_hdr(pkt);
 
 	if (pkt->mask & RXE_WRITE_OR_SEND) {
 		if (wqe->ibwr.send_flags & IB_SEND_INLINE) {
 			p = &wqe->dma.inline_data[wqe->dma.sge_offset];
 
-			if (!rxe_crc_disable)
-				crc = crc32_le(crc, p, payload);
+			crc = crc32_le(crc, p, payload);
 
 			memcpy(payload_addr(pkt), p, payload);
 
@@ -534,8 +532,8 @@ static int fill_packet(struct rxe_qp *qp, struct rxe_send_wqe *wqe,
 		} else {
 			if (copy_data(rxe, qp->pd, 0, &wqe->dma,
 				      payload_addr(pkt), payload,
-				      direction_out, !rxe_crc_disable ?
-				      &crc : NULL)) {
+				      direction_out,
+				      &crc)) {
 				return -1;
 			}
 		}
@@ -544,8 +542,7 @@ static int fill_packet(struct rxe_qp *qp, struct rxe_send_wqe *wqe,
 	p = payload_addr(pkt) + payload;
 	pad = (-payload) & 0x3;
 	if (pad) {
-		if (!rxe_crc_disable)
-			crc = crc32_le(crc, zerobuf, pad);
+		crc = crc32_le(crc, zerobuf, pad);
 
 		memcpy(p, zerobuf, pad);
 

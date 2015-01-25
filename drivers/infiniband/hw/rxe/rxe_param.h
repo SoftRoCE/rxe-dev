@@ -197,7 +197,6 @@ enum rxe_port_info_param {
 };
 
 extern int rxe_debug_flags;
-extern int rxe_crc_disable;
 extern int rxe_nsec_per_packet;
 extern int rxe_nsec_per_kbyte;
 extern int rxe_max_skb_per_qp;
