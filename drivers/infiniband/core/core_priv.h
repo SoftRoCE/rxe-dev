@@ -71,6 +71,8 @@ void ib_enum_roce_ports_of_netdev(roce_netdev_filter filter,
 				  roce_netdev_callback cb,
 				  void *cookie);
 
+const char *roce_gid_cache_type_str(enum ib_gid_type gid_type);
+
 int roce_gid_cache_get_gid(struct ib_device *ib_dev, u8 port, int index,
 			   union ib_gid *gid, struct ib_gid_attr *attr);
 
