@@ -50,6 +50,11 @@ enum gid_attr_find_mask {
 	GID_ATTR_FIND_MASK_DEFAULT	= 1UL << 3,
 };
 
+static const char * const gid_type_str[] = {
+	[IB_GID_TYPE_IB]	= "IB/IBOE V1\n",
+	[IB_GID_TYPE_IBOE_V2]	= "IBOE V2\n",
+};
+
 static inline int start_port(struct ib_device *ib_dev)
 {
 	return (ib_dev->node_type == RDMA_NODE_IB_SWITCH) ? 0 : 1;
@@ -59,6 +64,14 @@ struct dev_put_rcu {
 	struct rcu_head		rcu;
 	struct net_device	*ndev;
 };
+
+const char *roce_gid_cache_type_str(enum ib_gid_type gid_type)
+{
+	if (gid_type < ARRAY_SIZE(gid_type_str) && gid_type_str[gid_type])
+		return gid_type_str[gid_type];
+
+	return "Invalid GID type";
+}
 
 static void put_ndev(struct rcu_head *rcu)
 {
