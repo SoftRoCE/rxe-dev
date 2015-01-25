@@ -746,8 +746,7 @@ static enum resp_states read_reply(struct rxe_qp *qp,
 		payload++;
 	}
 
-	if (!rxe_crc_disable)
-		*buf = rxe_icrc_pkt(pkt);
+	*buf = rxe_icrc_pkt(pkt);
 
 	if (rxe_bypass_arbiter)
 		xmit_one_packet(rxe, qp, skb);
@@ -926,8 +925,7 @@ static int send_ack(struct rxe_qp *qp, struct rxe_pkt_info *pkt,
 	ack = SKB_TO_PKT(skb);
 	buf = payload_addr(ack);
 
-	if (!rxe_crc_disable)
-		*buf = rxe_icrc_pkt(ack);
+	*buf = rxe_icrc_pkt(ack);
 
 	if (rxe_bypass_arbiter)
 		xmit_one_packet(rxe, qp, skb);
@@ -959,8 +957,7 @@ static int send_atomic_ack(struct rxe_qp *qp, struct rxe_pkt_info *pkt,
 	ack = SKB_TO_PKT(skb);
 	buf = payload_addr(ack);
 
-	if (!rxe_crc_disable)
-		*buf = rxe_icrc_pkt(ack);
+	*buf = rxe_icrc_pkt(ack);
 
 	res = &qp->resp.resources[qp->resp.res_head];
 	free_rd_atomic_resource(qp, res);
