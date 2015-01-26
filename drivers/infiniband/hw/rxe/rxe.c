@@ -38,26 +38,6 @@ MODULE_AUTHOR("Bob Pearson, Frank Zago, John Groves");
 MODULE_DESCRIPTION("Soft RDMA transport");
 MODULE_LICENSE("Dual BSD/GPL");
 
-int rxe_fast_comp = 2;
-module_param_named(fast_comp, rxe_fast_comp, int, 0644);
-MODULE_PARM_DESC(fast_comp,
-		 "fast path call to completer (0=no, 1=no int context, 2=any context)");
-
-int rxe_fast_resp = 2;
-module_param_named(fast_resp, rxe_fast_resp, int, 0644);
-MODULE_PARM_DESC(fast_resp,
-		 "enable fast path call to responder (0=no, 1=no int context, 2=any context)");
-
-int rxe_fast_req = 2;
-module_param_named(fast_req, rxe_fast_req, int, 0644);
-MODULE_PARM_DESC(fast_req,
-		 "enable fast path call to requester (0=no, 1=no int context, 2=any context)");
-
-int rxe_fast_arb = 2;
-module_param_named(fast_arb, rxe_fast_arb, int, 0644);
-MODULE_PARM_DESC(fast_arb,
-		 "enable fast path call to arbiter (0=no, 1=no int context, 2=any context)");
-
 int rxe_nsec_per_packet = 200;
 module_param_named(nsec_per_packet, rxe_nsec_per_packet, int, 0644);
 MODULE_PARM_DESC(nsec_per_packet,
@@ -408,7 +388,7 @@ static int rxe_init(struct rxe_dev *rxe)
 	/* init arbiter */
 	spin_lock_init(&rxe->arbiter.list_lock);
 	INIT_LIST_HEAD(&rxe->arbiter.qp_list);
-	rxe_init_task(rxe, &rxe->arbiter.task, &rxe_fast_arb,
+	rxe_init_task(rxe, &rxe->arbiter.task,
 		      rxe, rxe_arbiter, "arb");
 
 	return 0;
