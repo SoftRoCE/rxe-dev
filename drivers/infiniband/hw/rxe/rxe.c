@@ -38,42 +38,6 @@ MODULE_AUTHOR("Bob Pearson, Frank Zago, John Groves");
 MODULE_DESCRIPTION("Soft RDMA transport");
 MODULE_LICENSE("Dual BSD/GPL");
 
-static int rxe_max_ucontext = RXE_MAX_UCONTEXT;
-module_param_named(max_ucontext, rxe_max_ucontext, int, 0644);
-MODULE_PARM_DESC(max_ucontext, "max user contexts per device");
-
-static int rxe_max_qp = RXE_MAX_QP;
-module_param_named(max_qp, rxe_max_qp, int, 0444);
-MODULE_PARM_DESC(max_qp, "max QPs per device");
-
-static int rxe_max_qp_wr = RXE_MAX_QP_WR;
-module_param_named(max_qp_wr, rxe_max_qp_wr, int, 0644);
-MODULE_PARM_DESC(max_qp_wr, "max send or recv WR's per QP");
-
-static int rxe_max_inline_data = RXE_MAX_INLINE_DATA;
-module_param_named(max_inline_data, rxe_max_inline_data, int, 0644);
-MODULE_PARM_DESC(max_inline_data, "max inline data per WR");
-
-static int rxe_max_cq = RXE_MAX_CQ;
-module_param_named(max_cq, rxe_max_cq, int, 0644);
-MODULE_PARM_DESC(max_cq, "max CQs per device");
-
-static int rxe_max_mr = RXE_MAX_MR;
-module_param_named(max_mr, rxe_max_mr, int, 0644);
-MODULE_PARM_DESC(max_mr, "max MRs per device");
-
-static int rxe_max_fmr = RXE_MAX_FMR;
-module_param_named(max_fmr, rxe_max_fmr, int, 0644);
-MODULE_PARM_DESC(max_fmr, "max MRs per device");
-
-static int rxe_max_mw = RXE_MAX_MW;
-module_param_named(max_mw, rxe_max_mw, int, 0644);
-MODULE_PARM_DESC(max_mw, "max MWs per device");
-
-static int rxe_max_log_cqe = RXE_MAX_LOG_CQE;
-module_param_named(max_log_cqe, rxe_max_log_cqe, int, 0644);
-MODULE_PARM_DESC(max_log_cqe, "Log2 of max CQ entries per CQ");
-
 int rxe_fast_comp = 2;
 module_param_named(fast_comp, rxe_fast_comp, int, 0644);
 MODULE_PARM_DESC(fast_comp,
@@ -186,7 +150,7 @@ void rxe_release(struct kref *kref)
 static int rxe_init_device_param(struct rxe_dev *rxe)
 {
 	rxe->num_ports				= RXE_NUM_PORT;
-	rxe->max_inline_data			= rxe_max_inline_data;
+	rxe->max_inline_data			= RXE_MAX_INLINE_DATA;
 
 	rxe->attr.fw_ver			= RXE_FW_VER;
 	rxe->attr.max_mr_size			= RXE_MAX_MR_SIZE;
@@ -194,16 +158,14 @@ static int rxe_init_device_param(struct rxe_dev *rxe)
 	rxe->attr.vendor_id			= RXE_VENDOR_ID;
 	rxe->attr.vendor_part_id		= RXE_VENDOR_PART_ID;
 	rxe->attr.hw_ver			= RXE_HW_VER;
-	rxe->attr.max_qp			= rxe_max_qp;
-	rxe->attr.max_qp_wr			= rxe_max_qp_wr;
+	rxe->attr.max_qp			= RXE_MAX_QP;
+	rxe->attr.max_qp_wr			= RXE_MAX_QP_WR;
 	rxe->attr.device_cap_flags		= RXE_DEVICE_CAP_FLAGS;
 	rxe->attr.max_sge			= RXE_MAX_SGE;
 	rxe->attr.max_sge_rd			= RXE_MAX_SGE_RD;
-	rxe->attr.max_cq			= rxe_max_cq;
-	if ((rxe_max_log_cqe < 0) || (rxe_max_log_cqe > 20))
-		rxe_max_log_cqe = RXE_MAX_LOG_CQE;
-	rxe->attr.max_cqe			= (1 << rxe_max_log_cqe) - 1;
-	rxe->attr.max_mr			= rxe_max_mr;
+	rxe->attr.max_cq			= RXE_MAX_CQ;
+	rxe->attr.max_cqe			= (1 << RXE_MAX_LOG_CQE) - 1;
+	rxe->attr.max_mr			= RXE_MAX_MR;
 	rxe->attr.max_pd			= RXE_MAX_PD;
 	rxe->attr.max_qp_rd_atom		= RXE_MAX_QP_RD_ATOM;
 	rxe->attr.max_ee_rd_atom		= RXE_MAX_EE_RD_ATOM;
@@ -213,14 +175,14 @@ static int rxe_init_device_param(struct rxe_dev *rxe)
 	rxe->attr.atomic_cap			= RXE_ATOMIC_CAP;
 	rxe->attr.max_ee			= RXE_MAX_EE;
 	rxe->attr.max_rdd			= RXE_MAX_RDD;
-	rxe->attr.max_mw			= rxe_max_mw;
+	rxe->attr.max_mw			= RXE_MAX_MW;
 	rxe->attr.max_raw_ipv6_qp		= RXE_MAX_RAW_IPV6_QP;
 	rxe->attr.max_raw_ethy_qp		= RXE_MAX_RAW_ETHY_QP;
 	rxe->attr.max_mcast_grp			= RXE_MAX_MCAST_GRP;
 	rxe->attr.max_mcast_qp_attach		= RXE_MAX_MCAST_QP_ATTACH;
 	rxe->attr.max_total_mcast_qp_attach	= RXE_MAX_TOT_MCAST_QP_ATTACH;
 	rxe->attr.max_ah			= RXE_MAX_AH;
-	rxe->attr.max_fmr			= rxe_max_fmr;
+	rxe->attr.max_fmr			= RXE_MAX_FMR;
 	rxe->attr.max_map_per_fmr		= RXE_MAX_MAP_PER_FMR;
 	rxe->attr.max_srq			= RXE_MAX_SRQ;
 	rxe->attr.max_srq_wr			= RXE_MAX_SRQ_WR;
@@ -229,7 +191,7 @@ static int rxe_init_device_param(struct rxe_dev *rxe)
 	rxe->attr.max_pkeys			= RXE_MAX_PKEYS;
 	rxe->attr.local_ca_ack_delay		= RXE_LOCAL_CA_ACK_DELAY;
 
-	rxe->max_ucontext			= rxe_max_ucontext;
+	rxe->max_ucontext			= RXE_MAX_UCONTEXT;
 	rxe->pref_mtu = rxe_mtu_int_to_enum(rxe_default_mtu);
 
 	return 0;
