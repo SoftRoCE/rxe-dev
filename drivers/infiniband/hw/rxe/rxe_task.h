@@ -47,7 +47,6 @@ enum {
  */
 struct rxe_task {
 	void			*obj;
-	int			*fast;
 	struct tasklet_struct	tasklet;
 	int			state;
 	spinlock_t		state_lock; /* spinlock for task state */
@@ -59,11 +58,10 @@ struct rxe_task {
 
 /*
  * init rxe_task structure
- *	fast => address of control flag, likely a module parameter
  *	arg  => parameter to pass to fcn
  *	fcn  => function to call until it returns != 0
  */
-int rxe_init_task(void *obj, struct rxe_task *task, int *fast,
+int rxe_init_task(void *obj, struct rxe_task *task,
 		  void *arg, int (*func)(void *), char *name);
 
 /*
@@ -79,8 +77,6 @@ int __rxe_do_task(struct rxe_task *task);
 
 /*
  * common function called by any of the main tasklets
- * if someone is calling the function on its own
- * thread (fast path) then they must increment busy
  * If there is any chance that there is additional
  * work to do someone must reschedule the task before
  * leaving
@@ -88,9 +84,7 @@ int __rxe_do_task(struct rxe_task *task);
 void rxe_do_task(unsigned long data);
 
 /*
- * run a task, use fast path if no one else
- * is currently running it and fast path is ok
- * else schedule it to run as a tasklet
+ * run a task, else schedule it to run as a tasklet
  */
 void rxe_run_task(struct rxe_task *task, int sched);
 

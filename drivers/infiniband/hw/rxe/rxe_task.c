@@ -112,11 +112,10 @@ void rxe_do_task(unsigned long data)
 	task->ret = ret;
 }
 
-int rxe_init_task(void *obj, struct rxe_task *task, int *fast,
+int rxe_init_task(void *obj, struct rxe_task *task,
 		  void *arg, int (*func)(void *), char *name)
 {
 	task->obj	= obj;
-	task->fast	= fast;
 	task->arg	= arg;
 	task->func	= func;
 	snprintf(task->name, sizeof(task->name), "%s", name);
@@ -134,24 +133,9 @@ void rxe_cleanup_task(struct rxe_task *task)
 	tasklet_kill(&task->tasklet);
 }
 
-/*
- * depending on value of fast allow bypassing
- * tasklet call or not
- *	 0 => never
- *	 1 => only if not in interrupt level
- *	>1 => always
- */
-static inline int rxe_fast_path_ok(int fast)
-{
-	if (fast == 0 || (fast == 1 && (in_irq() || irqs_disabled())))
-		return 0;
-	else
-		return 1;
-}
-
 void rxe_run_task(struct rxe_task *task, int sched)
 {
-	if (sched || !rxe_fast_path_ok(*task->fast))
+	if (sched)
 		tasklet_schedule(&task->tasklet);
 	else
 		rxe_do_task((unsigned long)task);
