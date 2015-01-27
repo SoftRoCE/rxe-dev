@@ -203,6 +203,5 @@ extern int rxe_max_skb_per_qp;
 extern int rxe_max_req_comp_gap;
 extern int rxe_max_pkt_per_ack;
 extern int rxe_default_mtu;
-extern int rxe_bypass_arbiter;
 
 #endif /* RXE_PARAM_H */
