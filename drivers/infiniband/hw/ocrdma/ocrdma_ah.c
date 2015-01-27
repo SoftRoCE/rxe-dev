@@ -41,10 +41,9 @@
 
 static inline int set_av_attr(struct ocrdma_dev *dev, struct ocrdma_ah *ah,
 			struct ib_ah_attr *attr, union ib_gid *sgid,
-			int pdid, bool *isvlan)
+			int pdid, bool *isvlan, u16 vlan_tag)
 {
 	int status = 0;
-	u16 vlan_tag;
 	struct ocrdma_eth_vlan eth;
 	struct ocrdma_grh grh;
 	int eth_sz;
@@ -53,7 +52,6 @@ static inline int set_av_attr(struct ocrdma_dev *dev, struct ocrdma_ah *ah,
 	memset(&grh, 0, sizeof(grh));
 
 	/* VLAN */
-	vlan_tag = attr->vlan_id;
 	if (!vlan_tag || (vlan_tag > 0xFFF))
 		vlan_tag = dev->pvid;
 	if (vlan_tag && (vlan_tag < 0x1000)) {
@@ -94,9 +92,11 @@ static inline int set_av_attr(struct ocrdma_dev *dev, struct ocrdma_ah *ah,
 struct ib_ah *ocrdma_create_ah(struct ib_pd *ibpd, struct ib_ah_attr *attr)
 {
 	u32 *ahid_addr;
-	bool isvlan = false;
 	int status;
 	struct ocrdma_ah *ah;
+	bool isvlan = false;
+	u16 vlan_tag = 0xffff;
+	struct ib_gid_attr sgid_attr;
 	struct ocrdma_pd *pd = get_ocrdma_pd(ibpd);
 	struct ocrdma_dev *dev = get_ocrdma_dev(ibpd->device);
 	union ib_gid sgid;
@@ -114,16 +114,22 @@ struct ib_ah *ocrdma_create_ah(struct ib_pd *ibpd, struct ib_ah_attr *attr)
 	if (status)
 		goto av_err;
 
-	status = ocrdma_query_gid(&dev->ibdev, 1, attr->grh.sgid_index, &sgid);
+	rcu_read_lock();
+	status = ib_get_cached_gid(&dev->ibdev, 1, attr->grh.sgid_index, &sgid,
+				   &sgid_attr);
 	if (status) {
 		pr_err("%s(): Failed to query sgid, status = %d\n",
 		      __func__, status);
 		goto av_conf_err;
 	}
+	if (sgid_attr.ndev && is_vlan_dev(sgid_attr.ndev))
+		vlan_tag = vlan_dev_vlan_id(sgid_attr.ndev);
+	rcu_read_unlock();
 
 	if (pd->uctx) {
 		status = rdma_addr_find_dmac_by_grh(&sgid, &attr->grh.dgid,
-                                        attr->dmac, &attr->vlan_id);
+						    attr->dmac, &vlan_tag,
+						    sgid_attr.ndev->ifindex);
 		if (status) {
 			pr_err("%s(): Failed to resolve dmac from gid." 
 				"status = %d\n", __func__, status);
@@ -131,7 +137,7 @@ struct ib_ah *ocrdma_create_ah(struct ib_pd *ibpd, struct ib_ah_attr *attr)
 		}
 	}
 
-	status = set_av_attr(dev, ah, attr, &sgid, pd->id, &isvlan);
+	status = set_av_attr(dev, ah, attr, &sgid, pd->id, &isvlan, vlan_tag);
 	if (status)
 		goto av_conf_err;
 

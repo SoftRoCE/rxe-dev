@@ -2428,7 +2428,8 @@ static int ocrdma_set_av_params(struct ocrdma_qp *qp,
 	int status;
 	struct ib_ah_attr *ah_attr = &attrs->ah_attr;
 	union ib_gid sgid, zgid;
-	u32 vlan_id;
+	struct ib_gid_attr sgid_attr;
+	u32 vlan_id = 0xffff;
 	u8 mac_addr[6];
 	struct ocrdma_dev *dev = get_ocrdma_dev(qp->ibqp.device);
 
@@ -2446,10 +2447,15 @@ static int ocrdma_set_av_params(struct ocrdma_qp *qp,
 	cmd->flags |= OCRDMA_QP_PARA_FLOW_LBL_VALID;
 	memcpy(&cmd->params.dgid[0], &ah_attr->grh.dgid.raw[0],
 	       sizeof(cmd->params.dgid));
-	status = ocrdma_query_gid(&dev->ibdev, 1,
-			ah_attr->grh.sgid_index, &sgid);
-	if (status)
-		return status;
+
+	rcu_read_lock();
+	status = ib_get_cached_gid(&dev->ibdev, 1, ah_attr->grh.sgid_index,
+				   &sgid, &sgid_attr);
+	if (!status) {
+		vlan_id = rdma_vlan_dev_vlan_id(sgid_attr.ndev);
+		memcpy(mac_addr, sgid_attr.ndev->dev_addr, ETH_ALEN);
+	}
+	rcu_read_unlock();
 
 	memset(&zgid, 0, sizeof(zgid));
 	if (!memcmp(&sgid, &zgid, sizeof(zgid)))
@@ -2467,7 +2473,6 @@ static int ocrdma_set_av_params(struct ocrdma_qp *qp,
 	ocrdma_cpu_to_le32(&cmd->params.sgid[0], sizeof(cmd->params.sgid));
 	cmd->params.vlan_dmac_b4_to_b5 = mac_addr[4] | (mac_addr[5] << 8);
 	if (attr_mask & IB_QP_VID) {
-		vlan_id = attrs->vlan_id;
 		cmd->params.vlan_dmac_b4_to_b5 |=
 		    vlan_id << OCRDMA_QP_PARAMS_VLAN_SHIFT;
 		cmd->flags |= OCRDMA_QP_PARA_VLAN_EN_VALID;
