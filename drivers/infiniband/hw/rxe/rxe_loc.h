@@ -235,9 +235,6 @@ extern struct ib_dma_mapping_ops rxe_dma_mapping_ops;
 
 void rxe_release(struct kref *kref);
 
-int xmit_one_packet(struct rxe_dev *rxe, struct rxe_qp *qp,
-		    struct sk_buff *skb);
-
 void arbiter_skb_queue(struct rxe_dev *rxe,
 		       struct rxe_qp *qp, struct sk_buff *skb);
 

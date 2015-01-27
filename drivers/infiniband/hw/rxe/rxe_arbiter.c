@@ -52,8 +52,8 @@ static inline void account_skb(struct rxe_dev *rxe, struct rxe_qp *qp,
 	}
 }
 
-int xmit_one_packet(struct rxe_dev *rxe, struct rxe_qp *qp,
-		    struct sk_buff *skb)
+static int xmit_one_packet(struct rxe_dev *rxe, struct rxe_qp *qp,
+			   struct sk_buff *skb)
 {
 	int err;
 	struct timespec time;
