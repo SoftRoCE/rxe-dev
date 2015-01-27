@@ -461,7 +461,7 @@ struct mlx4_ib_sriov {
 };
 
 struct mlx4_ib_iboe {
-	spinlock_t		lock;
+	struct rw_semaphore	sem; /* guard from concurrent access to data in this struct */
 	struct net_device      *netdevs[MLX4_MAX_PORTS];
 	atomic64_t		mac[MLX4_MAX_PORTS];
 	struct notifier_block 	nb;
