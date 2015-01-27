@@ -746,13 +746,9 @@ static enum resp_states read_reply(struct rxe_qp *qp,
 		payload++;
 	}
 
-	if (!rxe_crc_disable)
-		*buf = rxe_icrc_pkt(pkt);
+	*buf = rxe_icrc_pkt(pkt);
 
-	if (rxe_bypass_arbiter)
-		xmit_one_packet(rxe, qp, skb);
-	else
-		arbiter_skb_queue(rxe, qp, skb);
+	arbiter_skb_queue(rxe, qp, skb);
 
 	if (res->read.resid > 0) {
 		state = RESPST_DONE;
@@ -926,13 +922,9 @@ static int send_ack(struct rxe_qp *qp, struct rxe_pkt_info *pkt,
 	ack = SKB_TO_PKT(skb);
 	buf = payload_addr(ack);
 
-	if (!rxe_crc_disable)
-		*buf = rxe_icrc_pkt(ack);
+	*buf = rxe_icrc_pkt(ack);
 
-	if (rxe_bypass_arbiter)
-		xmit_one_packet(rxe, qp, skb);
-	else
-		arbiter_skb_queue(rxe, qp, skb);
+	arbiter_skb_queue(rxe, qp, skb);
 
 err1:
 	return err;
@@ -959,8 +951,7 @@ static int send_atomic_ack(struct rxe_qp *qp, struct rxe_pkt_info *pkt,
 	ack = SKB_TO_PKT(skb);
 	buf = payload_addr(ack);
 
-	if (!rxe_crc_disable)
-		*buf = rxe_icrc_pkt(ack);
+	*buf = rxe_icrc_pkt(ack);
 
 	res = &qp->resp.resources[qp->resp.res_head];
 	free_rd_atomic_resource(qp, res);
@@ -981,10 +972,7 @@ static int send_atomic_ack(struct rxe_qp *qp, struct rxe_pkt_info *pkt,
 		pr_warn("Could not clone atomic response\n");
 	}
 
-	if (rxe_bypass_arbiter)
-		xmit_one_packet(rxe, qp, skb_copy);
-	else
-		arbiter_skb_queue(rxe, qp, skb_copy);
+	arbiter_skb_queue(rxe, qp, skb_copy);
 
 out:
 	return rc;
@@ -1126,12 +1114,8 @@ static enum resp_states duplicate_request(struct rxe_qp *qp,
 			bth_set_psn(SKB_TO_PKT(skb_copy),
 				    qp->resp.psn - 1);
 			/* Resend the result. */
-			if (rxe_bypass_arbiter)
-				xmit_one_packet(to_rdev(qp->ibqp.device), qp,
-						skb_copy);
-			else
-				arbiter_skb_queue(to_rdev(qp->ibqp.device), qp,
-						  skb_copy);
+			arbiter_skb_queue(to_rdev(qp->ibqp.device), qp,
+					  skb_copy);
 		}
 
 		/* Resource not found. Class D error. Drop the request. */
