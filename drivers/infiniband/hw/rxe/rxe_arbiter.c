@@ -90,13 +90,10 @@ static int xmit_one_packet(struct rxe_dev *rxe, struct rxe_qp *qp,
 	else
 		err = rxe->ifc_ops->send(rxe, skb);
 
-	/* we can recover from RXE_QUEUE_STOPPED errors
-	   by retrying the packet. In other cases
-	   the packet is consumed so move on */
-	if (err == RXE_QUEUE_STOPPED)
-		return err;
-	else if (err)
+	if (err) {
 		rxe->xmit_errors++;
+		return err;
+	}
 
 	rxe->arbiter.delay = new_delay > 0;
 	if (rxe->arbiter.delay) {
@@ -148,8 +145,7 @@ int rxe_arbiter(void *arg)
 	if (skb) {
 		err = xmit_one_packet(rxe, qp, skb);
 		if (err) {
-			if (err == RXE_QUEUE_STOPPED)
-				skb_queue_head(&qp->send_pkts, skb);
+			skb_queue_head(&qp->send_pkts, skb);
 			rxe_run_task(&rxe->arbiter.task, 1);
 			return 1;
 		}
