@@ -459,8 +459,6 @@ struct rxe_ifc_ops {
 					   unsigned int port_num);
 };
 
-#define RXE_QUEUE_STOPPED		(999)
-
 struct rxe_dev {
 	struct ib_device	ib_dev;
 	struct ib_device_attr	attr;
