@@ -127,6 +127,30 @@ const char *ib_cache_gid_type_str(enum ib_gid_type gid_type)
 }
 EXPORT_SYMBOL(ib_cache_gid_type_str);
 
+int ib_cache_gid_parse_type_str(const char *buf)
+{
+	unsigned int i;
+	size_t len;
+	int err = -EINVAL;
+
+	len = strlen(buf);
+	if (len == 0)
+		return -EINVAL;
+
+	if (buf[len - 1] == '\n')
+		len--;
+
+	for (i = 0; i < ARRAY_SIZE(gid_type_str); ++i)
+		if (gid_type_str[i] && !strncmp(buf, gid_type_str[i], len) &&
+		    len == strlen(gid_type_str[i])) {
+			err = i;
+			break;
+		}
+
+	return err;
+}
+EXPORT_SYMBOL(ib_cache_gid_parse_type_str);
+
 static int write_gid(struct ib_device *ib_dev, u8 port,
 		     struct ib_gid_table *table, int ix,
 		     const union ib_gid *gid,
