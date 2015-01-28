@@ -100,6 +100,7 @@ struct ocrdma_dev_attr {
 	u8 local_ca_ack_delay;
 	u8 ird;
 	u8 num_ird_pages;
+	u8 roce_flags;
 };
 
 struct ocrdma_dma_mem {
@@ -573,6 +574,12 @@ static inline u8 ocrdma_is_enabled_and_synced(u32 state)
 	 */
 	return (state & OCRDMA_STATE_FLAG_ENABLED) &&
 		(state & OCRDMA_STATE_FLAG_SYNC);
+}
+
+static inline bool ocrdma_is_rocev2_supported(struct ocrdma_dev *dev)
+{
+	return (dev->attr.roce_flags & OCRDMA_L3_TYPE_IPV4 ||
+		dev->attr.roce_flags & OCRDMA_L3_TYPE_IPV6) ? true : false;
 }
 
 #endif
