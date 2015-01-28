@@ -72,6 +72,19 @@ const char *roce_gid_cache_type_str(enum ib_gid_type gid_type)
 
 	return "Invalid GID type";
 }
+EXPORT_SYMBOL_GPL(roce_gid_cache_type_str);
+
+int roce_gid_cache_parse_gid_str(const char *buf)
+{
+	unsigned int i;
+
+	for (i = 0; i < ARRAY_SIZE(gid_type_str); ++i)
+		if (gid_type_str[i] && !strcmp(buf, gid_type_str[i]))
+			return i;
+
+	return -EINVAL;
+}
+EXPORT_SYMBOL_GPL(roce_gid_cache_parse_gid_str);
 
 static void put_ndev(struct rcu_head *rcu)
 {

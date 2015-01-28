@@ -54,6 +54,11 @@ config INFINIBAND_ADDR_TRANS
 	depends on INFINIBAND
 	default y
 
+config CONFIG_INFINIBAND_ADDR_TRANS_CONFIGFS
+	bool
+	depends on INFINIBAND_ADDR_TRANS && CONFIGFS_FS
+	default y
+
 source "drivers/infiniband/hw/mthca/Kconfig"
 source "drivers/infiniband/hw/ipath/Kconfig"
 source "drivers/infiniband/hw/qib/Kconfig"

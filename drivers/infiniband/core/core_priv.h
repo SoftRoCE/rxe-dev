@@ -39,6 +39,20 @@
 
 #include <rdma/ib_verbs.h>
 
+#if IS_ENABLED(CONFIG_INFINIBAND_ADDR_TRANS_CONFIGFS)
+int cma_configfs_init(void);
+void cma_configfs_exit(void);
+#endif
+struct cma_device;
+typedef bool (*cma_device_filter)(struct ib_device *, void *);
+struct cma_device *cma_enum_devices_by_ibdev(cma_device_filter	filter,
+					     void		*cookie);
+enum ib_gid_type cma_get_default_gid_type(struct cma_device *cma_dev);
+void cma_set_default_gid_type(struct cma_device *cma_dev,
+			      enum ib_gid_type default_gid_type);
+void cma_ref_dev(struct cma_device *cma_dev);
+void cma_deref_dev(struct cma_device *cma_dev);
+
 extern struct workqueue_struct *roce_gid_mgmt_wq;
 
 int  ib_device_register_sysfs(struct ib_device *device,
@@ -72,6 +86,7 @@ void ib_enum_roce_ports_of_netdev(roce_netdev_filter filter,
 				  void *cookie);
 
 const char *roce_gid_cache_type_str(enum ib_gid_type gid_type);
+int roce_gid_cache_parse_gid_str(const char *buf);
 
 int roce_gid_cache_get_gid(struct ib_device *ib_dev, u8 port, int index,
 			   union ib_gid *gid, struct ib_gid_attr *attr);
