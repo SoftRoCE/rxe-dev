@@ -125,6 +125,19 @@ const char *ib_cache_gid_type_str(enum ib_gid_type gid_type)
 
 	return "Invalid GID type";
 }
+EXPORT_SYMBOL_GPL(ib_cache_gid_type_str);
+
+int ib_cache_gid_parse_type_str(const char *buf)
+{
+	unsigned int i;
+
+	for (i = 0; i < ARRAY_SIZE(gid_type_str); ++i)
+		if (gid_type_str[i] && !strcmp(buf, gid_type_str[i]))
+			return i;
+
+	return -EINVAL;
+}
+EXPORT_SYMBOL_GPL(ib_cache_gid_parse_type_str);
 
 static int write_gid(struct ib_device *ib_dev, u8 port,
 		     struct ib_gid_table *table, int ix,

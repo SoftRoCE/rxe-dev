@@ -88,6 +88,7 @@ unsigned long roce_gid_type_mask_support(struct ib_device *ib_dev, u8 port)
 
 	return ret_flags;
 }
+EXPORT_SYMBOL(roce_gid_type_mask_support);
 
 static void update_gid(enum gid_op_type gid_op, struct ib_device *ib_dev,
 		       u8 port, union ib_gid *gid,
