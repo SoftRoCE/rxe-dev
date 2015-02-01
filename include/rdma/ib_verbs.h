@@ -50,6 +50,8 @@
 #include <linux/workqueue.h>
 #include <linux/socket.h>
 #include <uapi/linux/if_ether.h>
+#include <net/ipv6.h>
+#include <net/ip.h>
 
 #include <linux/atomic.h>
 #include <linux/mmu_notifier.h>
@@ -106,6 +108,35 @@ enum rdma_protocol_type {
 
 __attribute_const__ enum rdma_transport_type
 rdma_node_get_transport(enum rdma_node_type node_type);
+
+enum rdma_network_type {
+	RDMA_NETWORK_IB,
+	RDMA_NETWORK_ROCE_V1 = RDMA_NETWORK_IB,
+	RDMA_NETWORK_IPV4,
+	RDMA_NETWORK_IPV6
+};
+
+static inline enum ib_gid_type ib_network_to_gid_type(enum rdma_network_type network_type)
+{
+	if (network_type == RDMA_NETWORK_IPV4 ||
+	    network_type == RDMA_NETWORK_IPV6)
+		return IB_GID_TYPE_ROCE_UDP_ENCAP;
+
+	/* IB_GID_TYPE_IB same as RDMA_NETWORK_ROCE_V1 */
+	return IB_GID_TYPE_IB;
+}
+
+static inline enum rdma_network_type ib_gid_to_network_type(enum ib_gid_type gid_type,
+							    union ib_gid *gid)
+{
+	if (gid_type == IB_GID_TYPE_IB)
+		return RDMA_NETWORK_IB;
+
+	if (ipv6_addr_v4mapped((struct in6_addr *)gid))
+		return RDMA_NETWORK_IPV4;
+	else
+		return RDMA_NETWORK_IPV6;
+}
 
 enum rdma_link_layer {
 	IB_LINK_LAYER_UNSPECIFIED,
@@ -533,6 +564,17 @@ struct ib_grh {
 	union ib_gid	dgid;
 };
 
+union rdma_network_hdr {
+	struct ib_grh ibgrh;
+	struct {
+		/* The IB spec states that if it's IPv4, the header
+		 * is located in the last 20 bytes of the header.
+		 */
+		u8		reserved[20];
+		struct iphdr	roce4grh;
+	};
+};
+
 enum {
 	IB_MULTICAST_QPN = 0xffffff
 };
@@ -769,6 +811,7 @@ enum ib_wc_flags {
 	IB_WC_IP_CSUM_OK	= (1<<3),
 	IB_WC_WITH_SMAC		= (1<<4),
 	IB_WC_WITH_VLAN		= (1<<5),
+	IB_WC_WITH_NETWORK_HDR_TYPE	= (1<<6),
 };
 
 struct ib_wc {
@@ -791,6 +834,7 @@ struct ib_wc {
 	u8			port_num;	/* valid only for DR SMPs on switches */
 	u8			smac[ETH_ALEN];
 	u16			vlan_id;
+	u8			network_hdr_type;
 };
 
 enum ib_cq_notify_flags {
