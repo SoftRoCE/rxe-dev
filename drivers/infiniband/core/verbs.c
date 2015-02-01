@@ -297,8 +297,84 @@ struct ib_ah *ib_create_ah(struct ib_pd *pd, struct ib_ah_attr *ah_attr)
 }
 EXPORT_SYMBOL(ib_create_ah);
 
+static int ib_get_grh_header_version(const void *h)
+{
+	const struct iphdr *ip4h = (struct iphdr *)(h + 20);
+	struct iphdr ip4h_checked;
+	const struct ipv6hdr *ip6h = (struct ipv6hdr *)h;
+
+	if (ip6h->version != 6)
+		return (ip4h->version == 4) ? 4 : 0;
+	/* version may be 6 or 4 */
+	if (ip4h->ihl != 5) /* IPv4 header length must be 5 for RR */
+		return 6;
+	/* Verify checksum.
+	   We can't write on scattered buffers so we need to copy to
+	   temp buffer.
+	 */
+	memcpy(&ip4h_checked, ip4h, sizeof(ip4h_checked));
+	ip4h_checked.check = 0;
+	ip4h_checked.check = ip_fast_csum((u8 *)&ip4h_checked, 5);
+	/* if IPv4 header checksum is OK, bellive it */
+	if (ip4h->check == ip4h_checked.check)
+		return 4;
+	return 6;
+}
+
+static int ib_get_dgid_sgid_by_grh(const void *h,
+				   enum rdma_network_type net_type,
+				   union ib_gid *dgid, union ib_gid *sgid)
+{
+	switch (net_type) {
+	case RDMA_NETWORK_IPV4: {
+		const struct iphdr *ip4h = (struct iphdr *)(h + 20);
+
+		ipv6_addr_set_v4mapped(ip4h->daddr, (struct in6_addr *)dgid);
+		ipv6_addr_set_v4mapped(ip4h->saddr, (struct in6_addr *)sgid);
+		return 0;
+	}
+	case RDMA_NETWORK_IPV6: {
+		struct ipv6hdr *ip6h = (struct ipv6hdr *)h;
+
+		memcpy(dgid, &ip6h->daddr, sizeof(*dgid));
+		memcpy(sgid, &ip6h->saddr, sizeof(*sgid));
+		return 0;
+	}
+	case RDMA_NETWORK_IB: {
+		struct ib_grh *grh = (struct ib_grh *)h;
+
+		memcpy(dgid, &grh->dgid, sizeof(*dgid));
+		memcpy(sgid, &grh->sgid, sizeof(*sgid));
+		return 0;
+	}
+	}
+
+	return -EINVAL;
+}
+
+static enum rdma_network_type ib_get_net_type_by_grh(struct ib_device *device,
+						     u8 port_num,
+						     const struct ib_grh *grh)
+{
+	int grh_version;
+
+	if (rdma_protocol_ib(device, port_num))
+		return RDMA_NETWORK_IB;
+
+	grh_version = ib_get_grh_header_version(grh);
+
+	if (grh_version == 4)
+		return RDMA_NETWORK_IPV4;
+
+	if (grh->next_hdr == IPPROTO_UDP)
+		return RDMA_NETWORK_IPV6;
+
+	return RDMA_NETWORK_IB;
+}
+
 struct find_gid_index_context {
 	u16 vlan_id;
+	enum ib_gid_type gid_type;
 };
 
 static bool find_gid_index(const union ib_gid *gid,
@@ -307,6 +383,9 @@ static bool find_gid_index(const union ib_gid *gid,
 {
 	struct find_gid_index_context *ctx =
 		(struct find_gid_index_context *)context;
+
+	if (ctx->gid_type != gid_attr->gid_type)
+		return false;
 
 	if ((!!(ctx->vlan_id != 0xffff) == !is_vlan_dev(gid_attr->ndev)) ||
 	    (is_vlan_dev(gid_attr->ndev) &&
@@ -318,9 +397,11 @@ static bool find_gid_index(const union ib_gid *gid,
 
 static int get_sgid_index_from_eth(struct ib_device *device, u8 port_num,
 				   u16 vlan_id, const union ib_gid *sgid,
+				   enum ib_gid_type gid_type,
 				   u16 *gid_index)
 {
-	struct find_gid_index_context context = {.vlan_id = vlan_id};
+	struct find_gid_index_context context = {.vlan_id = vlan_id,
+						 .gid_type = gid_type};
 
 	return ib_find_gid_by_filter(device, sgid, port_num, find_gid_index,
 				     &context, gid_index);
@@ -333,9 +414,24 @@ int ib_init_ah_from_wc(struct ib_device *device, u8 port_num,
 	u32 flow_class;
 	u16 gid_index;
 	int ret;
+	enum rdma_network_type net_type = RDMA_NETWORK_IB;
+	enum ib_gid_type gid_type = IB_GID_TYPE_IB;
+	union ib_gid dgid;
+	union ib_gid sgid;
 
 	memset(ah_attr, 0, sizeof *ah_attr);
 	if (rdma_cap_eth_ah(device, port_num)) {
+		if (wc->wc_flags & IB_WC_WITH_NETWORK_HDR_TYPE)
+			net_type = wc->network_hdr_type;
+		else
+			net_type = ib_get_net_type_by_grh(device, port_num, grh);
+		gid_type = ib_network_to_gid_type(net_type);
+	}
+	ret = ib_get_dgid_sgid_by_grh(grh, net_type, &dgid, &sgid);
+	if (ret)
+		return ret;
+
+	if (rdma_protocol_roce(device, port_num)) {
 		u16 vlan_id = wc->wc_flags & IB_WC_WITH_VLAN ?
 				wc->vlan_id : 0xffff;
 
@@ -344,7 +440,7 @@ int ib_init_ah_from_wc(struct ib_device *device, u8 port_num,
 
 		if (!(wc->wc_flags & IB_WC_WITH_SMAC) ||
 		    !(wc->wc_flags & IB_WC_WITH_VLAN)) {
-			ret = rdma_addr_find_dmac_by_grh(&grh->dgid, &grh->sgid,
+			ret = rdma_addr_find_dmac_by_grh(&dgid, &sgid,
 							 ah_attr->dmac,
 							 wc->wc_flags & IB_WC_WITH_VLAN ?
 							 NULL : &vlan_id,
@@ -354,7 +450,7 @@ int ib_init_ah_from_wc(struct ib_device *device, u8 port_num,
 		}
 
 		ret = get_sgid_index_from_eth(device, port_num, vlan_id,
-					      &grh->dgid, &gid_index);
+					      &dgid, gid_type, &gid_index);
 		if (ret)
 			return ret;
 
@@ -369,10 +465,10 @@ int ib_init_ah_from_wc(struct ib_device *device, u8 port_num,
 
 	if (wc->wc_flags & IB_WC_GRH) {
 		ah_attr->ah_flags = IB_AH_GRH;
-		ah_attr->grh.dgid = grh->sgid;
+		ah_attr->grh.dgid = sgid;
 
 		if (!rdma_cap_eth_ah(device, port_num)) {
-			ret = ib_find_cached_gid_by_port(device, &grh->dgid,
+			ret = ib_find_cached_gid_by_port(device, &dgid,
 							 IB_GID_TYPE_IB,
 							 port_num, NULL,
 							 &gid_index);
