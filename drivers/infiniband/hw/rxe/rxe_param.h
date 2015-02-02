@@ -154,6 +154,9 @@ enum rxe_device_param {
 	RXE_MAX_FMR_INDEX		= 0x00040000,
 	RXE_MIN_MW_INDEX		= 0x00040001,
 	RXE_MAX_MW_INDEX		= 0x00060000,
+
+	/* RC only, Valid PSN window used for flow control */
+	RXE_MAX_UNACKED_PSNS		= 8388608,
 };
 
 /*
@@ -200,7 +203,6 @@ extern int rxe_debug_flags;
 extern int rxe_nsec_per_packet;
 extern int rxe_nsec_per_kbyte;
 extern int rxe_max_skb_per_qp;
-extern int rxe_max_req_comp_gap;
 extern int rxe_max_pkt_per_ack;
 extern int rxe_default_mtu;
 
