@@ -1,4 +1,4 @@
-obj-$(CONFIG_INFINIBAND_RXE) += ib_rxe.o ib_rxe_net.o ib_rxe_sample.o
+obj-$(CONFIG_INFINIBAND_RXE) += ib_rxe.o ib_rxe_net.o
 
 ib_rxe-y := \
 	rxe.o \
@@ -25,6 +25,3 @@ ib_rxe-y := \
 ib_rxe_net-y := \
 	rxe_net.o \
 	rxe_net_sysfs.o
-
-ib_rxe_sample-y := \
-	rxe_sample.o
