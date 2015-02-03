@@ -359,9 +359,6 @@ err1:
  * For rxe_net:
  *	pkt->mask	= RXE_GRH_MASK
  *	pkt->hdr	= &grh	with no lrh
- * For IB transport (e.g. rxe_sample)
- *	pkt->mask	= RXE_LRH_MASK
- *	pkt->hdr	= &lrh with optional grh
  */
 int rxe_rcv(struct sk_buff *skb)
 {

@@ -624,11 +624,10 @@ int rxe_requester(void *arg)
 	if (!wqe)
 		goto exit;
 
-	/* heuristic sliding window algorithm to keep
-	   sender from overrunning receiver queues */
+	/* RC only, PSN Flow control */
 	if (qp_type(qp) == IB_QPT_RC)  {
 		if (psn_compare(qp->req.psn, qp->comp.psn +
-				rxe_max_req_comp_gap) > 0) {
+				RXE_MAX_UNACKED_PSNS) > 0) {
 			qp->req.wait_psn = 1;
 			goto exit;
 		}

@@ -21,8 +21,6 @@ config INFINIBAND_RXE
 
 	ib_rxe		- attaches to the Linux RDMA stack
 	ib_rxe_net	- attaches to the Linux network stack
-	ib_rxe_sample	- provides a simple sample network layer
-			  driver that provides a loopback interface.
 
 	Rxe_cfg provided with librxe is a configuration tool that
 	loads and unloads the ib_rxe and ib_rxe_net kernel modules
