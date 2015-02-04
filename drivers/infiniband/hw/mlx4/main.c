@@ -47,6 +47,8 @@
 #include <rdma/ib_addr.h>
 #include <rdma/ib_cache.h>
 
+#include <net/bonding.h>
+
 #include <linux/mlx4/driver.h>
 #include <linux/mlx4/cmd.h>
 #include <linux/mlx4/qp.h>
@@ -1534,6 +1536,32 @@ unlock:
 	mutex_unlock(&ibdev->qp1_proxy_lock[port - 1]);
 }
 
+static struct net_device *mlx4_ib_get_netdev(struct ib_device *device, u8 port_num)
+{
+	struct mlx4_ib_dev *ibdev = to_mdev(device);
+
+	if (mlx4_is_bonded(ibdev->dev)) {
+		struct net_device *dev;
+		struct net_device *upper = NULL;
+
+		rcu_read_lock();
+
+		dev = mlx4_get_protocol_dev(ibdev->dev, MLX4_PROT_ETH, port_num);
+		if (dev)
+			upper = netdev_master_upper_dev_get_rcu(dev);
+		else
+			goto unlock;
+		if (upper)
+			dev = bond_option_active_slave_get_rcu(netdev_priv(upper));
+unlock:
+		rcu_read_unlock();
+
+		return dev;
+	}
+
+	return mlx4_get_protocol_dev(ibdev->dev, MLX4_PROT_ETH, port_num);
+}
+
 static void mlx4_ib_scan_netdevs(struct mlx4_ib_dev *ibdev,
 				 struct net_device *dev,
 				 unsigned long event)
@@ -1815,6 +1843,7 @@ static void *mlx4_ib_add(struct mlx4_dev *dev)
 	ibdev->ib_dev.attach_mcast	= mlx4_ib_mcg_attach;
 	ibdev->ib_dev.detach_mcast	= mlx4_ib_mcg_detach;
 	ibdev->ib_dev.process_mad	= mlx4_ib_process_mad;
+	ibdev->ib_dev.get_netdev	= mlx4_ib_get_netdev;
 
 	if (!mlx4_is_slave(ibdev->dev)) {
 		ibdev->ib_dev.alloc_fmr		= mlx4_ib_fmr_alloc;

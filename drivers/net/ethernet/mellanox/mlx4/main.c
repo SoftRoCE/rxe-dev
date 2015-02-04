@@ -1283,6 +1283,24 @@ int mlx4_port_map_set(struct mlx4_dev *dev, struct mlx4_port_map *v2p)
 }
 EXPORT_SYMBOL_GPL(mlx4_port_map_set);
 
+int mlx4_port_map_get(struct mlx4_dev *dev, u8 vport, u8 *pport)
+{
+	struct mlx4_priv *priv = mlx4_priv(dev);
+
+	if (!pport)
+		return -EINVAL;
+	*pport = 0;
+
+	if (vport == 1)
+		*pport = priv->v2p.port1;
+	else if (vport == 2)
+		*pport = priv->v2p.port2;
+	if (!*pport)
+		return -EINVAL;
+	return 0;
+}
+EXPORT_SYMBOL_GPL(mlx4_port_map_get);
+
 static int mlx4_load_fw(struct mlx4_dev *dev)
 {
 	struct mlx4_priv *priv = mlx4_priv(dev);

@@ -81,6 +81,7 @@ struct mlx4_port_map {
 };
 
 int mlx4_port_map_set(struct mlx4_dev *dev, struct mlx4_port_map *v2p);
+int mlx4_port_map_get(struct mlx4_dev *dev, u8 vport, u8 *pport);
 
 void *mlx4_get_protocol_dev(struct mlx4_dev *dev, enum mlx4_protocol proto, int port);
 
