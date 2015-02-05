@@ -51,6 +51,7 @@
 #include <net/net_namespace.h>
 #include <uapi/linux/if_ether.h>
 #include <net/ipv6.h>
+#include <net/ip.h>
 
 #include <linux/atomic.h>
 #include <linux/mmu_notifier.h>
@@ -516,6 +517,14 @@ struct ib_grh {
 	u8		hop_limit;
 	union ib_gid	sgid;
 	union ib_gid	dgid;
+};
+
+union rdma_network_hdr {
+	struct ib_grh ibgrh;
+	struct {
+		u8		reserved[20];
+		struct iphdr	roce4grh;
+	};
 };
 
 enum {
