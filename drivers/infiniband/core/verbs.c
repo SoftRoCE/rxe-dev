@@ -219,37 +219,6 @@ static int ib_get_grh_header_version(const void *h)
 	return 6;
 }
 
-static int ib_get_dgid_sgid_by_grh(const void *h,
-				   enum rdma_network_type net_type,
-				   union ib_gid *dgid, union ib_gid *sgid)
-{
-	switch (net_type) {
-	case RDMA_NETWORK_IPV4: {
-		const struct iphdr *ip4h = (struct iphdr *)(h + 20);
-
-		ipv6_addr_set_v4mapped(ip4h->daddr, (struct in6_addr *)dgid);
-		ipv6_addr_set_v4mapped(ip4h->saddr, (struct in6_addr *)sgid);
-		return 0;
-	}
-	case RDMA_NETWORK_IPV6: {
-		struct ipv6hdr *ip6h = (struct ipv6hdr *)h;
-
-		memcpy(dgid, &ip6h->daddr, sizeof(*dgid));
-		memcpy(sgid, &ip6h->saddr, sizeof(*sgid));
-		return 0;
-	}
-	case RDMA_NETWORK_IB: {
-		struct ib_grh *grh = (struct ib_grh *)h;
-
-		memcpy(dgid, &grh->dgid, sizeof(*dgid));
-		memcpy(sgid, &grh->sgid, sizeof(*sgid));
-		return 0;
-	}
-	}
-
-	return -EINVAL;
-}
-
 static enum rdma_network_type ib_get_net_type_by_grh(struct ib_device *device,
 						     u8 port_num,
 						     const struct ib_grh *grh)
@@ -305,6 +274,40 @@ static int get_sgid_index_from_eth(struct ib_device *device, u8 port_num,
 				     &context, gid_index);
 }
 
+static int get_gids_from_grh(struct ib_grh *grh, enum rdma_network_type net_type,
+			     union ib_gid *sgid, union ib_gid *dgid)
+{
+	union rdma_network_hdr *l3grh;
+	struct sockaddr_in  src_in;
+	struct sockaddr_in  dst_in;
+	__be32 src_saddr, dst_saddr;
+
+	if (!sgid || !dgid)
+		return -EINVAL;
+
+	if (net_type == RDMA_NETWORK_IPV4) {
+		l3grh = (union rdma_network_hdr *)
+			((u8 *)grh + 20);
+		memcpy(&src_in.sin_addr.s_addr,
+		       &l3grh->roce4grh.saddr, 4);
+		memcpy(&dst_in.sin_addr.s_addr,
+		       &l3grh->roce4grh.daddr, 4);
+		src_saddr = src_in.sin_addr.s_addr;
+		dst_saddr = dst_in.sin_addr.s_addr;
+		ipv6_addr_set_v4mapped(src_saddr,
+				       (struct in6_addr *)sgid);
+		ipv6_addr_set_v4mapped(dst_saddr,
+				       (struct in6_addr *)dgid);
+		return 0;
+	} else if (net_type == RDMA_NETWORK_IPV6 ||
+		   net_type == RDMA_NETWORK_IB) {
+		*dgid = grh->dgid;
+		*sgid = grh->sgid;
+		return 0;
+	} else
+		return -EINVAL;
+}
+
 int ib_init_ah_from_wc(struct ib_device *device, u8 port_num, struct ib_wc *wc,
 		       struct ib_grh *grh, struct ib_ah_attr *ah_attr)
 {
@@ -326,7 +329,7 @@ int ib_init_ah_from_wc(struct ib_device *device, u8 port_num, struct ib_wc *wc,
 			net_type = ib_get_net_type_by_grh(device, port_num, grh);
 		gid_type = ib_network_to_gid_type(net_type);
 	}
-	ret = ib_get_dgid_sgid_by_grh(grh, net_type, &dgid, &sgid);
+	ret = get_gids_from_grh(grh, net_type, &sgid, &dgid);
 	if (ret)
 		return ret;
 
@@ -1004,6 +1007,9 @@ int ib_resolve_eth_dmac(struct ib_qp *qp,
 				rcu_read_unlock();
 				goto out;
 			}
+			if (sgid_attr.gid_type == IB_GID_TYPE_ROCE_V2)
+				qp_attr->ah_attr.grh.hop_limit =
+							IPV6_DEFAULT_HOPLIMIT;
 
 			dev_hold(sgid_attr.ndev);
 			ifindex = sgid_attr.ndev->ifindex;
