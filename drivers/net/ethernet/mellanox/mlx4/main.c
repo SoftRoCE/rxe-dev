@@ -409,8 +409,12 @@ static int mlx4_dev_cap(struct mlx4_dev *dev, struct mlx4_dev_cap *dev_cap)
 	if (mlx4_priv(dev)->pci_dev_data & MLX4_PCI_DEV_FORCE_SENSE_PORT)
 		dev->caps.flags |= MLX4_DEV_CAP_FLAG_SENSE_SUPPORT;
 	/* Don't do sense port on multifunction devices (for now at least) */
-	if (mlx4_is_mfunc(dev))
+	/* Don't do enable RoCE V2 on multifunction devices */
+	if (mlx4_is_mfunc(dev)) {
 		dev->caps.flags &= ~MLX4_DEV_CAP_FLAG_SENSE_SUPPORT;
+		dev_cap->flags2 &= ~MLX4_DEV_CAP_FLAG2_ROCE_V1_V2;
+		mlx4_dbg(dev, "RoCE V2 is not supported when SR-IOV is enabled\n");
+	}
 
 	if (mlx4_low_memory_profile()) {
 		dev->caps.log_num_macs  = MLX4_MIN_LOG_NUM_MAC;
