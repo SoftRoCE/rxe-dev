@@ -198,6 +198,9 @@ struct ib_sa_mcmember_rec {
 	u8           scope;
 	u8           join_state;
 	int          proxy_join;
+	int	     ifindex;
+	struct net  *net;
+	enum ib_gid_type gid_type;
 };
 
 /* Service Record Component Mask Sec 15.2.5.14 Ver 1.1	*/
