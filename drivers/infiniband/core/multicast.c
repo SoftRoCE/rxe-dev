@@ -729,8 +729,22 @@ int ib_init_ah_from_mcmember(struct ib_device *device, u8 port_num,
 	u16 gid_index;
 	u8 p;
 
-	ret = ib_find_cached_gid(device, &rec->port_gid, IB_GID_TYPE_IB,
-				 NULL, 0, &p, &gid_index);
+	switch (rdma_port_get_link_layer(device, port_num)) {
+	case IB_LINK_LAYER_ETHERNET:
+		ret = ib_find_cached_gid_by_port(device, &rec->port_gid,
+						 rec->gid_type, port_num,
+						 rec->net, rec->ifindex,
+						 &gid_index);
+		break;
+	case IB_LINK_LAYER_INFINIBAND:
+		ret = ib_find_cached_gid(device, &rec->port_gid,
+					 IB_GID_TYPE_IB, NULL, 0, &p,
+					 &gid_index);
+		break;
+	default:
+		ret = -EINVAL;
+	}
+
 	if (ret)
 		return ret;
 
