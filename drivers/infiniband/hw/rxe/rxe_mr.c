@@ -300,7 +300,7 @@ int rxe_mem_init_user(struct rxe_dev *rxe, struct rxe_pd *pd, u64 start,
 	mem->length		= length;
 	mem->iova		= iova;
 	mem->va			= start;
-	mem->offset		= umem->offset;
+	mem->offset		= ib_umem_offset(umem);
 	mem->state		= RXE_MEM_STATE_VALID;
 	mem->type		= RXE_MEM_TYPE_MR;
 
