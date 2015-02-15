@@ -455,6 +455,72 @@ int roce_gid_cache_find_gid_by_port(struct ib_device *ib_dev, union ib_gid *gid,
 	return -ENOENT;
 }
 
+int roce_gid_cache_find_gid_by_filter(struct ib_device *ib_dev,
+				      union ib_gid *gid,
+				      u8 port,
+				      bool (*filter)(const union ib_gid *,
+						     const struct ib_gid_attr *,
+						     void *),
+				      void *context,
+				      u16 *index)
+{
+	struct ib_roce_gid_cache *cache;
+	unsigned int i;
+	bool found = false;
+
+	if (!ib_dev->cache.roce_gid_cache)
+		return -ENOSYS;
+
+	if (port < start_port(ib_dev) ||
+	    port > start_port(ib_dev) + ib_dev->phys_port_cnt ||
+	    rdma_port_get_link_layer(ib_dev, port) !=
+		IB_LINK_LAYER_ETHERNET)
+		return -ENOSYS;
+
+	cache = ib_dev->cache.roce_gid_cache[port - start_port(ib_dev)];
+
+	if (!cache || !cache->active)
+		return -ENOENT;
+
+	for (i = 0; i < cache->sz; i++) {
+		unsigned int orig_seq;
+		struct ib_gid_attr attr;
+
+		orig_seq = cache->data_vec[i].seq;
+		if (orig_seq == -1)
+			continue;
+		/* Make sure the sequence number we remeber was read
+		 * before the gid cache entry content is read.
+		 */
+		smp_rmb();
+
+		if (memcmp(gid, &cache->data_vec[i].gid, sizeof(*gid)))
+			continue;
+
+		memcpy(&attr, &cache->data_vec[i].attr, sizeof(attr));
+
+		rcu_read_lock();
+
+		/* Make sure we finished reading the attribute */
+		smp_rmb();
+		if (orig_seq == READ_ONCE(cache->data_vec[i].seq))
+			if (!filter || filter(gid, &attr, context))
+				found = true;
+
+		rcu_read_unlock();
+
+		if (found)
+			break;
+	}
+
+	if (!found)
+		return -ENOENT;
+
+	if (index)
+		*index = i;
+	return 0;
+}
+
 static struct ib_roce_gid_cache *alloc_roce_gid_cache(int sz)
 {
 	struct ib_roce_gid_cache *cache =

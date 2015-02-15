@@ -280,6 +280,30 @@ int ib_find_cached_gid_by_port(struct ib_device *device,
 }
 EXPORT_SYMBOL(ib_find_cached_gid_by_port);
 
+int ib_find_gid_by_filter(struct ib_device *device,
+			  union ib_gid *gid,
+			  u8 port_num,
+			  bool (*filter)(const union ib_gid *gid,
+					 const struct ib_gid_attr *,
+					 void *),
+			  void *context, u16 *index)
+{
+	/* Look for a RoCE device with the specified GID. */
+	if (!ib_cache_use_roce_gid_cache(device, port_num))
+		return roce_gid_cache_find_gid_by_filter(device, gid,
+							 port_num, filter,
+							 context, index);
+
+	/* Only RoCE GID cache supports filter function */
+	if (filter)
+		return -ENOSYS;
+
+	/* If no RoCE devices with the specified GID, look for IB device. */
+	return __ib_find_cached_gid_by_port(device, port_num,
+					    gid, index);
+}
+EXPORT_SYMBOL(ib_find_gid_by_filter);
+
 int ib_get_cached_pkey(struct ib_device *device,
 		       u8                port_num,
 		       int               index,
