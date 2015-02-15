@@ -78,6 +78,15 @@ enum ib_cache_gid_default_mode {
 	IB_CACHE_GID_DEFAULT_MODE_DELETE
 };
 
+int ib_cache_gid_find_by_filter(struct ib_device *ib_dev,
+				const union ib_gid *gid,
+				u8 port,
+				bool (*filter)(const union ib_gid *gid,
+					       const struct ib_gid_attr *,
+					       void *),
+				void *context,
+				u16 *index);
+
 void ib_cache_gid_set_default_gid(struct ib_device *ib_dev, u8 port,
 				  struct net_device *ndev,
 				  enum ib_cache_gid_default_mode mode);
