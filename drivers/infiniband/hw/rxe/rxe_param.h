@@ -163,6 +163,9 @@ enum rxe_device_param {
 
 	/* Max inflight SKBs per queue pair */
 	RXE_MAX_INFLIGHT_SKBS_PER_QP	= 64,
+
+	/* Delay before calling arbiter timer */
+	RXE_NSEC_ARB_TIMER_DELAY	= 200,
 };
 
 /*
@@ -206,8 +209,6 @@ enum rxe_port_info_param {
 };
 
 extern int rxe_debug_flags;
-extern int rxe_nsec_per_packet;
-extern int rxe_nsec_per_kbyte;
 extern int rxe_max_pkt_per_ack;
 extern int rxe_default_mtu;
 
