@@ -57,8 +57,6 @@ static int xmit_one_packet(struct rxe_dev *rxe, struct rxe_qp *qp,
 			   struct sk_buff *skb)
 {
 	int err;
-	struct timespec time;
-	long new_delay;
 	struct rxe_pkt_info *pkt = SKB_TO_PKT(skb);
 	int is_request = pkt->mask & RXE_REQ_MASK;
 
@@ -74,18 +72,6 @@ static int xmit_one_packet(struct rxe_dev *rxe, struct rxe_qp *qp,
 			goto drop;
 	}
 
-	/* busy wait for static rate control
-	   we could refine this by yielding the tasklet
-	   for larger delays and waiting out the small ones */
-	if (rxe->arbiter.delay)
-		do {
-			getnstimeofday(&time);
-		} while (timespec_compare(&time, &rxe->arbiter.time) < 0);
-
-	new_delay = (skb->len*rxe_nsec_per_kbyte) >> 10;
-	if (new_delay < rxe_nsec_per_packet)
-		new_delay = rxe_nsec_per_packet;
-
 	if (pkt->mask & RXE_LOOPBACK_MASK)
 		err = rxe->ifc_ops->loopback(rxe, skb);
 	else
@@ -94,17 +80,6 @@ static int xmit_one_packet(struct rxe_dev *rxe, struct rxe_qp *qp,
 	if (err) {
 		rxe->xmit_errors++;
 		return err;
-	}
-
-	rxe->arbiter.delay = new_delay > 0;
-	if (rxe->arbiter.delay) {
-		getnstimeofday(&time);
-		time.tv_nsec += new_delay;
-		while (time.tv_nsec > NSEC_PER_SEC) {
-			time.tv_sec += 1;
-			time.tv_nsec -= NSEC_PER_SEC;
-		}
-		rxe->arbiter.time = time;
 	}
 
 	goto done;
@@ -158,6 +133,15 @@ int rxe_arbiter(void *arg)
 	if (list_empty(qpl) && !skb_queue_empty(&qp->send_pkts))
 		list_add_tail(qpl, &rxe->arbiter.qp_list);
 
+	if (skb)
+		rxe->arbiter.skb_count--;
+
+	if (rxe->arbiter.skb_count &&
+	    !timer_pending(&rxe->arbiter.timer))
+		mod_timer(&rxe->arbiter.timer,
+			  jiffies +
+			  nsecs_to_jiffies(RXE_NSEC_ARB_TIMER_DELAY));
+
 	spin_unlock_bh(&rxe->arbiter.list_lock);
 	return 0;
 }
@@ -168,8 +152,6 @@ int rxe_arbiter(void *arg)
 void arbiter_skb_queue(struct rxe_dev *rxe, struct rxe_qp *qp,
 		       struct sk_buff *skb)
 {
-	int must_sched;
-
 	/* add packet to send queue */
 	skb_queue_tail(&qp->send_pkts, skb);
 
@@ -177,9 +159,20 @@ void arbiter_skb_queue(struct rxe_dev *rxe, struct rxe_qp *qp,
 	spin_lock_bh(&rxe->arbiter.list_lock);
 	if (list_empty(&qp->arbiter_list))
 		list_add_tail(&qp->arbiter_list, &rxe->arbiter.qp_list);
-	spin_unlock_bh(&rxe->arbiter.list_lock);
 
-	/* run the arbiter, use tasklet unless only one packet */
-	must_sched = skb_queue_len(&qp->resp_pkts) > 1;
-	rxe_run_task(&rxe->arbiter.task, must_sched);
+	if (rxe->arbiter.skb_count)
+		rxe->arbiter.skb_count++;
+	else {
+		rxe->arbiter.skb_count++;
+		rxe_run_task(&rxe->arbiter.task, 1);
+	}
+
+	spin_unlock_bh(&rxe->arbiter.list_lock);
+}
+
+void rxe_arbiter_timer(unsigned long arg)
+{
+	struct rxe_dev *rxe = (struct rxe_dev *)arg;
+
+	rxe_run_task(&rxe->arbiter.task, 0);
 }

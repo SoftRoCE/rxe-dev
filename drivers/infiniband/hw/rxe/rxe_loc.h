@@ -238,6 +238,8 @@ void rxe_release(struct kref *kref);
 void arbiter_skb_queue(struct rxe_dev *rxe,
 		       struct rxe_qp *qp, struct sk_buff *skb);
 
+void rxe_arbiter_timer(unsigned long arg);
+
 int rxe_arbiter(void *arg);
 int rxe_completer(void *arg);
 int rxe_requester(void *arg);

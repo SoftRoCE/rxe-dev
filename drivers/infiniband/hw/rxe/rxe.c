@@ -38,16 +38,6 @@ MODULE_AUTHOR("Bob Pearson, Frank Zago, John Groves");
 MODULE_DESCRIPTION("Soft RDMA transport");
 MODULE_LICENSE("Dual BSD/GPL");
 
-int rxe_nsec_per_packet = 200;
-module_param_named(nsec_per_packet, rxe_nsec_per_packet, int, 0644);
-MODULE_PARM_DESC(nsec_per_packet,
-		 "minimum output packet delay nsec");
-
-int rxe_nsec_per_kbyte = 700;
-module_param_named(nsec_per_kbyte, rxe_nsec_per_kbyte, int, 0644);
-MODULE_PARM_DESC(nsec_per_kbyte,
-		 "minimum output packet delay per kbyte nsec");
-
 int rxe_max_pkt_per_ack = 64;
 module_param_named(max_pkt_per_ack, rxe_max_pkt_per_ack, int, 0644);
 MODULE_PARM_DESC(max_pkt_per_ack,
@@ -83,6 +73,7 @@ static void rxe_cleanup_ports(struct rxe_dev *rxe)
    must have been destroyed */
 static void rxe_cleanup(struct rxe_dev *rxe)
 {
+	del_timer_sync(&rxe->arbiter.timer);
 	rxe_cleanup_task(&rxe->arbiter.task);
 
 	rxe_pool_cleanup(&rxe->uc_pool);
@@ -375,6 +366,10 @@ static int rxe_init(struct rxe_dev *rxe)
 	INIT_LIST_HEAD(&rxe->arbiter.qp_list);
 	rxe_init_task(rxe, &rxe->arbiter.task,
 		      rxe, rxe_arbiter, "arb");
+	setup_timer(&rxe->arbiter.timer,
+		    rxe_arbiter_timer,
+		    (unsigned long)rxe);
+	rxe->arbiter.skb_count = 0;
 
 	return 0;
 
