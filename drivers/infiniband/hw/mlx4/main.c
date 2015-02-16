@@ -367,14 +367,15 @@ static int eth_link_query_port(struct ib_device *ibdev, u8 port,
 	props->state		= IB_PORT_DOWN;
 	props->phys_state	= state_to_phys_state(props->state);
 	props->active_mtu	= IB_MTU_256;
-	if (is_bonded)
-		rtnl_lock(); /* required to get upper dev */
 	down_read(&iboe->sem);
 	ndev = iboe->netdevs[port - 1];
-	if (ndev && is_bonded)
-		ndev = netdev_master_upper_dev_get(ndev);
+	if (ndev && is_bonded) {
+		rcu_read_lock(); /* required to get upper dev */
+		ndev = netdev_master_upper_dev_get_rcu(ndev);
+		rcu_read_unlock();
+	}
 	if (!ndev)
-		goto out_unlock;
+		goto unlock;
 
 	tmp = iboe_get_mtu(ndev->mtu);
 	props->active_mtu = tmp ? min(props->max_mtu, tmp) : IB_MTU_256;
@@ -382,10 +383,8 @@ static int eth_link_query_port(struct ib_device *ibdev, u8 port,
 	props->state		= (netif_running(ndev) && netif_carrier_ok(ndev)) ?
 					IB_PORT_ACTIVE : IB_PORT_DOWN;
 	props->phys_state	= state_to_phys_state(props->state);
-out_unlock:
+unlock:
 	up_read(&iboe->sem);
-	if (is_bonded)
-		rtnl_unlock();
 out:
 	mlx4_free_cmd_mailbox(mdev->dev, mailbox);
 	return err;
