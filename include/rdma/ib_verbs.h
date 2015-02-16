@@ -1717,6 +1717,7 @@ struct ib_device {
 	enum {
 		IB_DEV_UNINITIALIZED,
 		IB_DEV_REGISTERED,
+		IB_DEV_UNREGISTERING,
 		IB_DEV_UNREGISTERED
 	}                            reg_state;
 
@@ -1729,6 +1730,8 @@ struct ib_device {
 	u32			     local_dma_lkey;
 	u8                           node_type;
 	u8                           phys_port_cnt;
+	struct kref		     refcount;
+	struct completion	     free;
 };
 
 struct ib_client {
@@ -1741,6 +1744,9 @@ struct ib_client {
 
 struct ib_device *ib_alloc_device(size_t size);
 void ib_dealloc_device(struct ib_device *device);
+
+void ib_device_hold(struct ib_device *device);
+int ib_device_put(struct ib_device *device);
 
 int ib_register_device(struct ib_device *device,
 		       int (*port_callback)(struct ib_device *,
