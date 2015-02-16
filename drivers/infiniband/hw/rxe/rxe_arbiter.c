@@ -43,7 +43,8 @@ static inline void account_skb(struct rxe_dev *rxe, struct rxe_qp *qp,
 		atomic_dec(&rxe->req_skb_out);
 		atomic_dec(&qp->req_skb_out);
 		if (qp->need_req_skb) {
-			if (atomic_read(&qp->req_skb_out) < rxe_max_skb_per_qp)
+			if (atomic_read(&qp->req_skb_out) <
+					RXE_MAX_INFLIGHT_SKBS_PER_QP)
 				rxe_run_task(&qp->req.task, 1);
 		}
 	} else {

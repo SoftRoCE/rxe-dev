@@ -160,6 +160,9 @@ enum rxe_device_param {
 	 * the PSN range (2^24).
 	 */
 	RXE_MAX_UNACKED_PSNS		= 0x800000,
+
+	/* Max inflight SKBs per queue pair */
+	RXE_MAX_INFLIGHT_SKBS_PER_QP	= 64,
 };
 
 /*
@@ -205,7 +208,6 @@ enum rxe_port_info_param {
 extern int rxe_debug_flags;
 extern int rxe_nsec_per_packet;
 extern int rxe_nsec_per_kbyte;
-extern int rxe_max_skb_per_qp;
 extern int rxe_max_pkt_per_ack;
 extern int rxe_default_mtu;
 
