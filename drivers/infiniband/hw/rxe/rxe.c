@@ -48,11 +48,6 @@ module_param_named(nsec_per_kbyte, rxe_nsec_per_kbyte, int, 0644);
 MODULE_PARM_DESC(nsec_per_kbyte,
 		 "minimum output packet delay per kbyte nsec");
 
-int rxe_max_skb_per_qp = 800;
-module_param_named(max_skb_per_qp, rxe_max_skb_per_qp, int, 0644);
-MODULE_PARM_DESC(max_skb_per_qp,
-		 "maximum skb's posted for output");
-
 int rxe_max_pkt_per_ack = 64;
 module_param_named(max_pkt_per_ack, rxe_max_pkt_per_ack, int, 0644);
 MODULE_PARM_DESC(max_pkt_per_ack,
