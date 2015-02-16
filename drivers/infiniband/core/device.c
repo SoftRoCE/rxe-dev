@@ -261,6 +261,39 @@ out:
 	return ret;
 }
 
+static void ib_device_complete_cb(struct kref *kref)
+{
+	struct ib_device *device = container_of(kref, struct ib_device,
+						refcount);
+
+	if (device->reg_state >= IB_DEV_UNREGISTERING)
+		complete(&device->free);
+}
+
+/**
+ * ib_device_hold - increase the reference count of device
+ * @device: ib device to prevent from being free'd
+ *
+ * Prevent the device from being free'd.
+ */
+void ib_device_hold(struct ib_device *device)
+{
+	kref_get(&device->refcount);
+}
+EXPORT_SYMBOL(ib_device_hold);
+
+/**
+ * ib_device_put - decrease the reference count of device
+ * @device: allows this device to be free'd
+ *
+ * Puts the ib_device and allows it to be free'd.
+ */
+int ib_device_put(struct ib_device *device)
+{
+	return kref_put(&device->refcount, ib_device_complete_cb);
+}
+EXPORT_SYMBOL(ib_device_put);
+
 /**
  * ib_register_device - Register an IB device with IB core
  * @device:Device to register
@@ -312,6 +345,9 @@ int ib_register_device(struct ib_device *device,
 
 	list_add_tail(&device->core_list, &device_list);
 
+	kref_init(&device->refcount);
+	init_completion(&device->free);
+
 	device->reg_state = IB_DEV_REGISTERED;
 
 	{
@@ -342,6 +378,8 @@ void ib_unregister_device(struct ib_device *device)
 
 	mutex_lock(&device_mutex);
 
+	device->reg_state = IB_DEV_UNREGISTERING;
+
 	list_for_each_entry_reverse(client, &client_list, list)
 		if (client->remove)
 			client->remove(device);
@@ -354,6 +392,9 @@ void ib_unregister_device(struct ib_device *device)
 	mutex_unlock(&device_mutex);
 
 	ib_device_unregister_sysfs(device);
+
+	ib_device_put(device);
+	wait_for_completion(&device->free);
 
 	spin_lock_irqsave(&device->client_data_lock, flags);
 	list_for_each_entry_safe(context, tmp, &device->client_data_list, list)
