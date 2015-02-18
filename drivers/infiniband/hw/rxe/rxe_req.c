@@ -629,18 +629,14 @@ int rxe_requester(void *arg)
 	 * half of the PSN range (2^24).
 	 */
 	if (qp_type(qp) == IB_QPT_RC)  {
-		if (psn_compare(qp->req.psn, qp->comp.psn +
-				RXE_MAX_UNACKED_PSNS) > 0) {
+		if (qp->req.psn > (qp->comp.psn + RXE_MAX_UNACKED_PSNS)) {
 			qp->req.wait_psn = 1;
 			goto exit;
 		}
 	}
 
-	/* heuristic algorithm to prevent sender from
-	   overrunning the output queue. to not overrun
-	   the receiver's input queue (UC/UD) requires
-	   rate control or application level flow control */
-	if (atomic_read(&qp->req_skb_out) > rxe_max_skb_per_qp) {
+	/* Limit the number of inflight SKBs per QP */
+	if (atomic_read(&qp->req_skb_out) > RXE_MAX_INFLIGHT_SKBS_PER_QP) {
 		qp->need_req_skb = 1;
 		goto exit;
 	}

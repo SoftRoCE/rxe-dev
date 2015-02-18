@@ -435,8 +435,8 @@ struct rxe_arbiter {
 	struct rxe_task		task;
 	struct list_head	qp_list;
 	spinlock_t		list_lock; /* list lock */
-	struct timespec		time;
-	int			delay;
+	struct timer_list	timer;
+	int			skb_count;
 	int			queue_stalled;
 };
 
