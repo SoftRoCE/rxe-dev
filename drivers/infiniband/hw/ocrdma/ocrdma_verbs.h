@@ -44,6 +44,10 @@ int ocrdma_modify_port(struct ib_device *, u8 port, int mask,
 void ocrdma_get_guid(struct ocrdma_dev *, u8 *guid);
 int ocrdma_query_gid(struct ib_device *, u8 port,
 		     int index, union ib_gid *gid);
+struct net_device *ocrdma_get_netdev(struct ib_device *device, u8 port_num);
+int ocrdma_modify_gid(struct ib_device *ibdev, u8 port_num, unsigned int index,
+		      const union ib_gid *gid, const struct ib_gid_attr *attr,
+		      void **context);
 int ocrdma_query_pkey(struct ib_device *, u8 port, u16 index, u16 *pkey);
 
 struct ib_ucontext *ocrdma_alloc_ucontext(struct ib_device *,
