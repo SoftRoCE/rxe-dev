@@ -640,19 +640,6 @@ static int rxe_post_send(struct ib_qp *ibqp, struct ib_send_wr *wr,
 		return -EINVAL;
 	}
 
-	if (qp->is_user) {
-		unsigned int wqe_index = producer_index(qp->sq.queue);
-		struct rxe_send_wqe *wqe;
-
-		WARN_ON(wr);
-
-		/* compute length of last wr for use in
-		   fastpath decision below */
-		wqe_index = (wqe_index - 1) & qp->sq.queue->index_mask;
-		wqe = addr_from_index(qp->sq.queue, wqe_index);
-		length = wqe->dma.resid;
-	}
-
 	while (wr) {
 		mask = wr_opcode_mask(wr->opcode, qp);
 		if (unlikely(!mask)) {
