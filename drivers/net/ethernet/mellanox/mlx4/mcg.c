@@ -858,7 +858,9 @@ static int parse_trans_rule(struct mlx4_dev *dev, struct mlx4_spec_list *spec,
 		break;
 
 	case MLX4_NET_TRANS_RULE_ID_IB:
-		rule_hw->ib.l3_qpn = spec->ib.l3_qpn;
+		rule_hw->ib.l3_qpn = spec->ib.l3_qpn |
+			(spec->ib.roce_type == MLX4_FLOW_SPEC_IB_ROCE_TYPE_IPV4 ?
+			 0x80 : 0);
 		rule_hw->ib.qpn_mask = spec->ib.qpn_msk;
 		memcpy(&rule_hw->ib.dst_gid, &spec->ib.dst_gid, 16);
 		memcpy(&rule_hw->ib.dst_gid_msk, &spec->ib.dst_gid_msk, 16);
@@ -1383,10 +1385,18 @@ int mlx4_trans_to_dmfs_attach(struct mlx4_dev *dev, struct mlx4_qp *qp,
 			memcpy(spec.eth.dst_mac_msk, &mac_mask, ETH_ALEN);
 			break;
 
+		case MLX4_PROT_IB_IPV4:
+			spec.id = MLX4_NET_TRANS_RULE_ID_IB;
+			memcpy(spec.ib.dst_gid + 12, gid + 12, 4);
+			memset(spec.ib.dst_gid_msk + 12, 0xff, 4);
+			spec.ib.roce_type = MLX4_FLOW_SPEC_IB_ROCE_TYPE_IPV4;
+
+			break;
 		case MLX4_PROT_IB_IPV6:
 			spec.id = MLX4_NET_TRANS_RULE_ID_IB;
 			memcpy(spec.ib.dst_gid, gid, 16);
-			memset(&spec.ib.dst_gid_msk, 0xff, 16);
+			memset(spec.ib.dst_gid_msk, 0xff, 16);
+			spec.ib.roce_type = MLX4_FLOW_SPEC_IB_ROCE_TYPE_IPV6;
 			break;
 		default:
 			return -EINVAL;

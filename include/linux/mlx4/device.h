@@ -386,6 +386,11 @@ enum mlx4_protocol {
 	MLX4_PROT_FCOE
 };
 
+enum mlx4_flow_roce_type {
+	MLX4_FLOW_SPEC_IB_ROCE_TYPE_IPV6 = 0,
+	MLX4_FLOW_SPEC_IB_ROCE_TYPE_IPV4
+};
+
 enum {
 	MLX4_MTT_FLAG_PRESENT		= 1
 };
@@ -1165,6 +1170,7 @@ struct mlx4_spec_ipv4 {
 struct mlx4_spec_ib {
 	__be32  l3_qpn;
 	__be32	qpn_msk;
+	enum    mlx4_flow_roce_type roce_type;
 	u8	dst_gid[16];
 	u8	dst_gid_msk[16];
 };
