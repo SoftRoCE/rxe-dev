@@ -43,6 +43,7 @@
 #include <rdma/ib_pack.h>
 #include <rdma/ib_smi.h>
 #include <rdma/ib_umem.h>
+#include <rdma/ib_cache.h>
 
 #include "rxe_opcode.h"
 #include "rxe_hdr.h"

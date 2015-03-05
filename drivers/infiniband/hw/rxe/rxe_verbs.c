@@ -63,30 +63,43 @@ err1:
 	return -EINVAL;
 }
 
+union ib_gid zgid;
+
 static int rxe_query_gid(struct ib_device *device,
 			 u8 port_num, int index, union ib_gid *gid)
 {
+	int ret;
+
+	if (index > RXE_PORT_GID_TBL_LEN)
+		return -EINVAL;
+
+	ret = ib_get_cached_gid(device, port_num, index, gid, NULL);
+	if (ret == -EAGAIN) {
+		memcpy(gid, &zgid, sizeof(*gid));
+		return 0;
+	}
+
+	return ret;
+}
+
+static struct net_device *rxe_get_netdev(struct ib_device *device,
+						 u8 port_num)
+{
 	struct rxe_dev *rxe = to_rdev(device);
-	struct rxe_port *port;
 
-	if (unlikely(port_num < 1 || port_num > rxe->num_ports)) {
-		pr_warn("invalid port_num = %d\n", port_num);
-		goto err1;
-	}
+	if (rxe->ndev)
+		return rxe->ndev;
 
-	port = &rxe->port[port_num - 1];
+	return NULL;
+}
 
-	if (unlikely(index < 0 || index >= port->attr.gid_tbl_len)) {
-		pr_warn("invalid index = %d\n", index);
-		goto err1;
-	}
-
-	gid->global.subnet_prefix = port->subnet_prefix;
-	gid->global.interface_id = port->guid_tbl[index];
+static int rxe_modify_gid(struct ib_device *device,
+			  u8 port_num, unsigned int index,
+			  const union ib_gid *gid,
+			  const struct ib_gid_attr *attr,
+			  void **context)
+{
 	return 0;
-
-err1:
-	return -EINVAL;
 }
 
 static int rxe_query_pkey(struct ib_device *device,
@@ -1244,6 +1257,8 @@ int rxe_register_device(struct rxe_dev *rxe)
 	dev->modify_port = rxe_modify_port;
 	dev->get_link_layer = rxe_get_link_layer;
 	dev->query_gid = rxe_query_gid;
+	dev->get_netdev = rxe_get_netdev;
+	dev->modify_gid = rxe_modify_gid;
 	dev->query_pkey = rxe_query_pkey;
 	dev->alloc_ucontext = rxe_alloc_ucontext;
 	dev->dealloc_ucontext = rxe_dealloc_ucontext;
