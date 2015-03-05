@@ -1383,11 +1383,12 @@ static int _mlx4_set_path(struct mlx4_ib_dev *dev, const struct ib_ah_attr *ah,
 static int mlx4_set_path(struct mlx4_ib_dev *dev, const struct ib_qp_attr *qp,
 			 enum ib_qp_attr_mask qp_attr_mask,
 			 struct mlx4_ib_qp *mqp,
-			 struct mlx4_qp_path *path, u8 port)
+			 struct mlx4_qp_path *path, u8 port,
+			 u16 vlan_id, u8 *smac)
 {
 	return _mlx4_set_path(dev, &qp->ah_attr,
-			      mlx4_mac_to_u64((u8 *)qp->smac),
-			      (qp_attr_mask & IB_QP_VID) ? qp->vlan_id : 0xffff,
+			      mlx4_mac_to_u64(smac),
+			      vlan_id,
 			      path, &mqp->pri, port);
 }
 
@@ -1398,9 +1399,8 @@ static int mlx4_set_alt_path(struct mlx4_ib_dev *dev,
 			     struct mlx4_qp_path *path, u8 port)
 {
 	return _mlx4_set_path(dev, &qp->alt_ah_attr,
-			      mlx4_mac_to_u64((u8 *)qp->alt_smac),
-			      (qp_attr_mask & IB_QP_ALT_VID) ?
-			      qp->alt_vlan_id : 0xffff,
+			      0,
+			      0xffff,
 			      path, &mqp->alt, port);
 }
 
@@ -1416,7 +1416,8 @@ static void update_mcg_macs(struct mlx4_ib_dev *dev, struct mlx4_ib_qp *qp)
 	}
 }
 
-static int handle_eth_ud_smac_index(struct mlx4_ib_dev *dev, struct mlx4_ib_qp *qp, u8 *smac,
+static int handle_eth_ud_smac_index(struct mlx4_ib_dev *dev,
+				    struct mlx4_ib_qp *qp,
 				    struct mlx4_qp_context *context)
 {
 	u64 u64_mac;
@@ -1556,9 +1557,30 @@ static int __mlx4_ib_modify_qp(struct ib_qp *ibqp,
 	}
 
 	if (attr_mask & IB_QP_AV) {
+		u8 port_num = attr_mask & IB_QP_PORT ? attr->port_num : qp->port;
+		int index = attr->ah_attr.grh.sgid_index;
+		union ib_gid gid;
+		struct ib_gid_attr gid_attr;
+		u16 vlan = 0xffff;
+		u8 smac[ETH_ALEN];
+		int status = 0;
+
+		if (rdma_port_get_link_layer(&dev->ib_dev, qp->port) ==
+				IB_LINK_LAYER_ETHERNET) {
+			rcu_read_lock();
+			status = ib_get_cached_gid(ibqp->device, port_num,
+						   index, &gid, &gid_attr);
+			if (!status) {
+				vlan = rdma_vlan_dev_vlan_id(gid_attr.ndev);
+				memcpy(smac, gid_attr.ndev->dev_addr, ETH_ALEN);
+			}
+			rcu_read_unlock();
+		}
+		if (status)
+			goto out;
+
 		if (mlx4_set_path(dev, attr, attr_mask, qp, &context->pri_path,
-				  attr_mask & IB_QP_PORT ?
-				  attr->port_num : qp->port))
+				  port_num, vlan, smac))
 			goto out;
 
 		optpar |= (MLX4_QP_OPTPAR_PRIMARY_ADDR_PATH |
@@ -1695,7 +1717,8 @@ static int __mlx4_ib_modify_qp(struct ib_qp *ibqp,
 			if (qp->mlx4_ib_qp_type == MLX4_IB_QPT_UD ||
 			    qp->mlx4_ib_qp_type == MLX4_IB_QPT_PROXY_GSI ||
 			    qp->mlx4_ib_qp_type == MLX4_IB_QPT_TUN_GSI) {
-				err = handle_eth_ud_smac_index(dev, qp, (u8 *)attr->smac, context);
+				err = handle_eth_ud_smac_index(dev, qp,
+							       context);
 				if (err) {
 					err = -EINVAL;
 					goto out;

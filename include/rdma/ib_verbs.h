@@ -74,6 +74,8 @@ enum ib_gid_type {
 	IB_GID_TYPE_SIZE
 };
 
+#define ROCE_V2_UDP_DPORT	1021
+
 struct ib_gid_attr {
 	enum ib_gid_type	gid_type;
 	struct net_device	*ndev;
@@ -668,7 +670,6 @@ struct ib_ah_attr {
 	u8			ah_flags;
 	u8			port_num;
 	u8			dmac[ETH_ALEN];
-	u16			vlan_id;
 };
 
 enum ib_wc_status {
@@ -979,10 +980,6 @@ struct ib_qp_attr {
 	u8			rnr_retry;
 	u8			alt_port_num;
 	u8			alt_timeout;
-	u8			smac[ETH_ALEN];
-	u8			alt_smac[ETH_ALEN];
-	u16			vlan_id;
-	u16			alt_vlan_id;
 };
 
 enum ib_wr_opcode {
