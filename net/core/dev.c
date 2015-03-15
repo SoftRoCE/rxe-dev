@@ -5198,6 +5198,7 @@ static int __netdev_upper_dev_link(struct net_device *dev,
 				   void *private)
 {
 	struct netdev_adjacent *i, *j, *to_i, *to_j;
+	struct netdev_changeupper_info changeupper_info;
 	int ret = 0;
 
 	ASSERT_RTNL();
@@ -5253,7 +5254,10 @@ static int __netdev_upper_dev_link(struct net_device *dev,
 			goto rollback_lower_mesh;
 	}
 
-	call_netdevice_notifiers(NETDEV_CHANGEUPPER, dev);
+	changeupper_info.event = NETDEV_CHANGEUPPER_LINK;
+	changeupper_info.upper = upper_dev;
+	call_netdevice_notifiers_info(NETDEV_CHANGEUPPER, dev,
+				      &changeupper_info.info);
 	return 0;
 
 rollback_lower_mesh:
@@ -5349,6 +5353,7 @@ void netdev_upper_dev_unlink(struct net_device *dev,
 			     struct net_device *upper_dev)
 {
 	struct netdev_adjacent *i, *j;
+	struct netdev_changeupper_info changeupper_info;
 	ASSERT_RTNL();
 
 	__netdev_adjacent_dev_unlink_neighbour(dev, upper_dev);
@@ -5370,7 +5375,10 @@ void netdev_upper_dev_unlink(struct net_device *dev,
 	list_for_each_entry(i, &upper_dev->all_adj_list.upper, list)
 		__netdev_adjacent_dev_unlink(dev, i->dev);
 
-	call_netdevice_notifiers(NETDEV_CHANGEUPPER, dev);
+	changeupper_info.event = NETDEV_CHANGEUPPER_UNLINK;
+	changeupper_info.upper = upper_dev;
+	call_netdevice_notifiers_info(NETDEV_CHANGEUPPER, dev,
+				      &changeupper_info.info);
 }
 EXPORT_SYMBOL(netdev_upper_dev_unlink);
 
