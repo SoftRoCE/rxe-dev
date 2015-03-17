@@ -43,11 +43,6 @@ module_param_named(max_pkt_per_ack, rxe_max_pkt_per_ack, int, 0644);
 MODULE_PARM_DESC(max_pkt_per_ack,
 		 "max packets before an ack will be generated");
 
-int rxe_default_mtu = 1024;
-module_param_named(default_mtu, rxe_default_mtu, int, 0644);
-MODULE_PARM_DESC(default_mtu,
-		 "default rxe port mtu");
-
 /* free resources for all ports on a device */
 static void rxe_cleanup_ports(struct rxe_dev *rxe)
 {
@@ -148,7 +143,6 @@ static int rxe_init_device_param(struct rxe_dev *rxe)
 	rxe->attr.local_ca_ack_delay		= RXE_LOCAL_CA_ACK_DELAY;
 
 	rxe->max_ucontext			= RXE_MAX_UCONTEXT;
-	rxe->pref_mtu = rxe_mtu_int_to_enum(rxe_default_mtu);
 
 	return 0;
 }
@@ -386,11 +380,9 @@ int rxe_set_mtu(struct rxe_dev *rxe, unsigned int ndev_mtu,
 	enum rxe_mtu mtu;
 
 	mtu = eth_mtu_int_to_enum(ndev_mtu);
-	if (!mtu)
-		return -EINVAL;
 
-	/* Set the port mtu to min(feasible, preferred) */
-	mtu = min_t(enum rxe_mtu, mtu, rxe->pref_mtu);
+	/* Make sure that new MTU in range */
+	mtu = mtu ? min_t(enum rxe_mtu, mtu, port->attr.max_mtu): RXE_MTU_256;
 
 	port->attr.active_mtu = (enum ib_mtu __force)mtu;
 	port->mtu_cap = rxe_mtu_enum_to_int(mtu);
