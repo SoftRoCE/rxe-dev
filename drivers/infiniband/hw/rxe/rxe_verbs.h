@@ -501,8 +501,6 @@ struct rxe_dev {
 
 	u8			num_ports;
 	struct rxe_port		*port;
-
-	enum rxe_mtu		pref_mtu;
 };
 
 static inline struct rxe_dev *to_rdev(struct ib_device *dev)

@@ -210,6 +210,5 @@ enum rxe_port_info_param {
 
 extern int rxe_debug_flags;
 extern int rxe_max_pkt_per_ack;
-extern int rxe_default_mtu;
 
 #endif /* RXE_PARAM_H */
