@@ -73,3 +73,12 @@ int rxe_av_to_attr(struct rxe_dev *rxe, struct rxe_av *av,
 	*attr = av->attr;
 	return 0;
 }
+
+int rxe_av_fill_ip_info(struct rxe_dev *rxe, struct rxe_av *av,
+		    struct ib_ah_attr *attr, union ib_gid *sgid)
+{
+	rdma_gid2ip(&av->sgid_addr._sockaddr, sgid);
+	rdma_gid2ip(&av->dgid_addr._sockaddr, &attr->grh.dgid);
+
+	return 0;
+}

@@ -622,23 +622,8 @@ static struct sk_buff *prepare_ack_packet(struct rxe_qp *qp,
 	ack->offset = pkt->offset;
 	ack->paylen = paylen;
 
-	/* fill in lrh/grh/bth using the request packet headers */
+	/* fill in bth using the request packet headers */
 	memcpy(ack->hdr, pkt->hdr, pkt->offset + RXE_BTH_BYTES);
-
-	/* swap addresses in lrh */
-	if (ack->mask & RXE_LRH_MASK) {
-		__lrh_set_dlid(ack->hdr, __lrh_slid(pkt->hdr));
-		__lrh_set_slid(ack->hdr, __lrh_dlid(pkt->hdr));
-	}
-
-	/* swap addresses in grh */
-	if (ack->mask & RXE_GRH_MASK) {
-		grh_set_paylen(ack, paylen);
-		grh_set_dgid(ack, grh_sgid(pkt)->global.subnet_prefix,
-			     grh_sgid(pkt)->global.interface_id);
-		grh_set_sgid(ack, grh_dgid(pkt)->global.subnet_prefix,
-			     grh_dgid(pkt)->global.interface_id);
-	}
 
 	bth_set_opcode(ack, opcode);
 	bth_set_qpn(ack, qp->attr.dest_qp_num);
@@ -765,15 +750,6 @@ static enum resp_states execute(struct rxe_qp *qp, struct rxe_pkt_info *pkt)
 	enum resp_states err;
 
 	if (pkt->mask & RXE_SEND_MASK) {
-		if (qp_type(qp) == IB_QPT_UD ||
-		    qp_type(qp) == IB_QPT_SMI ||
-		    qp_type(qp) == IB_QPT_GSI) {
-			/* Copy the GRH */
-			err = send_data_in(qp, pkt->hdr, RXE_GRH_BYTES);
-			if (err)
-				return err;
-		}
-
 		err = send_data_in(qp, payload_addr(pkt), payload_size(pkt));
 		if (err)
 			return err;

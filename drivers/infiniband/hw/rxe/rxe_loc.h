@@ -45,6 +45,9 @@ int rxe_av_from_attr(struct rxe_dev *rxe, u8 port_num,
 int rxe_av_to_attr(struct rxe_dev *rxe, struct rxe_av *av,
 		   struct ib_ah_attr *attr);
 
+int rxe_av_fill_ip_info(struct rxe_dev *rxe, struct rxe_av *av,
+		    struct ib_ah_attr *attr, union ib_gid *sgid);
+
 /* rxe_cq.c */
 int rxe_cq_chk_attr(struct rxe_dev *rxe, struct rxe_cq *cq,
 		    int cqe, int comp_vector, struct ib_udata *udata);

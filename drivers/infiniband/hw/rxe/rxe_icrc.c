@@ -37,7 +37,8 @@
 /* Compute a partial ICRC for all the IB transport headers. */
 u32 rxe_icrc_hdr(struct rxe_pkt_info *pkt)
 {
-	u32 crc;
+	u32 crc = 0;
+#if 0
 	unsigned int length;
 	unsigned int grh_offset;
 	unsigned int bth_offset;
@@ -78,7 +79,7 @@ u32 rxe_icrc_hdr(struct rxe_pkt_info *pkt)
 	/* And finish to compute the CRC on the remainder of the headers. */
 	crc = crc32_le(crc, pkt->hdr + length,
 		       rxe_opcode[pkt->opcode].length - RXE_BTH_BYTES);
-
+#endif
 	return crc;
 }
 
