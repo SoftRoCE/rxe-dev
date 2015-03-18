@@ -38,11 +38,6 @@ MODULE_AUTHOR("Bob Pearson, Frank Zago, John Groves");
 MODULE_DESCRIPTION("Soft RDMA transport");
 MODULE_LICENSE("Dual BSD/GPL");
 
-int rxe_max_pkt_per_ack = 64;
-module_param_named(max_pkt_per_ack, rxe_max_pkt_per_ack, int, 0644);
-MODULE_PARM_DESC(max_pkt_per_ack,
-		 "max packets before an ack will be generated");
-
 /* free resources for all ports on a device */
 static void rxe_cleanup_ports(struct rxe_dev *rxe)
 {
