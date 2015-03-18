@@ -114,10 +114,10 @@ struct rxe_pool {
 };
 
 /* initialize slab caches for managed objects */
-int __init rxe_cache_init(void);
+int rxe_cache_init(void);
 
 /* cleanup slab caches for managed objects */
-void __exit rxe_cache_exit(void);
+void rxe_cache_exit(void);
 
 /* initialize a pool of objects with given limit on
    number of elements. gets parameters from rxe_type_info
