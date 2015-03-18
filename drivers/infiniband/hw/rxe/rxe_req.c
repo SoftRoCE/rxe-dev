@@ -428,7 +428,7 @@ static struct rxe_pkt_info *init_req_packet(struct rxe_qp *qp,
 					 qp->attr.dest_qp_num;
 
 	ack_req = ((pkt->mask & RXE_END_MASK) ||
-		(qp->req.noack_pkts++ > rxe_max_pkt_per_ack));
+		(qp->req.noack_pkts++ > RXE_MAX_PKT_PER_ACK));
 	if (ack_req)
 		qp->req.noack_pkts = 0;
 
