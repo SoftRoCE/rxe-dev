@@ -54,9 +54,6 @@
 
 #define IB_PHYS_STATE_LINK_UP		(5)
 
-#define RXE_SKB_ALIGN_PAD_SIZE		(16)
-#define RXE_SKB_ALIGN_PAD_MASK		(RXE_SKB_ALIGN_PAD_SIZE - 1)
-
 int rxe_set_mtu(struct rxe_dev *rxe, unsigned int dev_mtu,
 		unsigned int port_num);
 

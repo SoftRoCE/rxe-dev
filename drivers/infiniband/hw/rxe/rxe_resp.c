@@ -600,7 +600,6 @@ static struct sk_buff *prepare_ack_packet(struct rxe_qp *qp,
 	struct sk_buff *skb;
 	struct rxe_pkt_info *ack;
 	int paylen;
-	int align;
 	int pad;
 
 	/*
@@ -609,10 +608,7 @@ static struct sk_buff *prepare_ack_packet(struct rxe_qp *qp,
 	pad = (-payload) & 0x3;
 	paylen = rxe_opcode[opcode].length + payload + pad + RXE_ICRC_SIZE;
 
-	/* alignment of payload from BTH, init_packet finishes */
-	align = rxe_opcode[opcode].length & RXE_SKB_ALIGN_PAD_MASK;
-
-	skb = rxe->ifc_ops->init_packet(rxe, &qp->pri_av, paylen, align);
+	skb = rxe->ifc_ops->init_packet(rxe, &qp->pri_av, paylen);
 	if (!skb)
 		return NULL;
 

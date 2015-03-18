@@ -387,13 +387,9 @@ static struct rxe_pkt_info *init_req_packet(struct rxe_qp *qp,
 	int			ack_req;
 	unsigned int		lnh;
 	unsigned int		length;
-	int			align;
 
 	/* length from start of bth to end of icrc */
 	paylen = rxe_opcode[opcode].length + payload + pad + RXE_ICRC_SIZE;
-
-	/* alignment of payload from BTH, init_packet finishes */
-	align = rxe_opcode[opcode].length & RXE_SKB_ALIGN_PAD_MASK;
 
 	/* TODO support APM someday */
 	if (qp_type(qp) == IB_QPT_RC || qp_type(qp) == IB_QPT_UC)
@@ -403,7 +399,7 @@ static struct rxe_pkt_info *init_req_packet(struct rxe_qp *qp,
 
 	/* init skb
 	 * ifc layer must set lrh/grh flags */
-	skb = rxe->ifc_ops->init_packet(rxe, av, paylen, align);
+	skb = rxe->ifc_ops->init_packet(rxe, av, paylen);
 	if (!skb)
 		return NULL;
 
