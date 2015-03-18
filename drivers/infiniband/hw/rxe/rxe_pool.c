@@ -127,7 +127,7 @@ static inline enum rxe_elem_type rxe_type(void *arg)
 	return elem->pool->type;
 }
 
-int __init rxe_cache_init(void)
+int rxe_cache_init(void)
 {
 	int err;
 	int i;
@@ -160,7 +160,7 @@ err1:
 	return err;
 }
 
-void __exit rxe_cache_exit(void)
+void rxe_cache_exit(void)
 {
 	int i;
 	struct rxe_type_info *type;

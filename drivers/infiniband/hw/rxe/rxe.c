@@ -446,6 +446,12 @@ static int __init rxe_module_init(void)
 		return err;
 	}
 
+	err = rxe_net_init();
+	if (err) {
+		pr_err("rxe: unable to init\n");
+		rxe_cache_exit();
+		return err;
+	}
 	pr_info("rxe: loaded\n");
 
 	return 0;
@@ -453,6 +459,7 @@ static int __init rxe_module_init(void)
 
 static void __exit rxe_module_exit(void)
 {
+	rxe_net_exit();
 	rxe_cache_exit();
 
 	pr_info("rxe: unloaded\n");

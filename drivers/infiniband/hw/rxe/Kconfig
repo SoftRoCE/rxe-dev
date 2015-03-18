@@ -17,10 +17,5 @@ config INFINIBAND_RXE
 	space verbs API, libibverbs. The other layer interfaces
 	with the Linux network stack at layer 3.
 
-	There are three kernel modules provided with RXE.
-
-	ib_rxe		- attaches to the Linux RDMA stack
-	ib_rxe_net	- attaches to the Linux network stack
-
 	Rxe_cfg provided with librxe is a configuration tool that
-	loads and unloads the ib_rxe and ib_rxe_net kernel modules
+	loads and unloads the ib_rxe kernel modules

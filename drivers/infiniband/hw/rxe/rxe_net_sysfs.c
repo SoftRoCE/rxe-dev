@@ -80,7 +80,7 @@ static int rxe_param_set_add(const char *val, struct kernel_param *kp)
 
 	len = sanitize_arg(val, intf, sizeof(intf));
 	if (!len) {
-		pr_err("rxe_net: add: invalid interface name\n");
+		pr_err("rxe: add: invalid interface name\n");
 		return -EINVAL;
 	}
 
@@ -91,14 +91,14 @@ static int rxe_param_set_add(const char *val, struct kernel_param *kp)
 		if (ndev && (0 == strncmp(intf, ndev->name, len))) {
 			spin_unlock_bh(&net_info_lock);
 			if (net_info[i].rxe)
-				pr_info("rxe_net: already configured on %s\n",
+				pr_info("rxe: already configured on %s\n",
 					intf);
 			else {
 				rxe_net_add(ndev);
 				if (net_info[i].rxe) {
 					rxe_set_port_state(ndev);
 				} else {
-					pr_err("rxe_net: add appears to have failed for %s (index %d)\n",
+					pr_err("rxe: add appears to have failed for %s (index %d)\n",
 					       intf, i);
 				}
 			}
@@ -137,7 +137,7 @@ static int rxe_param_set_remove(const char *val, struct kernel_param *kp)
 
 	len = sanitize_arg(val, intf, sizeof(intf));
 	if (!len) {
-		pr_err("rxe_net: remove: invalid interface name\n");
+		pr_err("rxe: remove: invalid interface name\n");
 		return -EINVAL;
 	}
 

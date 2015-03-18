@@ -43,10 +43,6 @@
 #include "rxe.h"
 #include "rxe_net.h"
 
-MODULE_AUTHOR("Bob Pearson, Frank Zago, John Groves");
-MODULE_DESCRIPTION("RDMA transport over Converged Enhanced Ethernet");
-MODULE_LICENSE("Dual BSD/GPL");
-
 static int rxe_eth_proto_id = ETH_P_RXE;
 module_param_named(eth_proto_id, rxe_eth_proto_id, int, 0644);
 MODULE_PARM_DESC(eth_proto_id, "Ethernet protocol ID (default/correct=0x8915)");
@@ -237,7 +233,7 @@ static int init_av(struct rxe_dev *rxe, struct ib_ah_attr *attr,
 				= rxe->port[0].guid_tbl[0];
 			av->attr = *attr;
 		} else {
-			pr_info("rxe_net: attempting to init av without grh\n");
+			pr_info("rxe: attempting to init av without grh\n");
 			return -EINVAL;
 		}
 	}
@@ -253,7 +249,7 @@ static int init_av(struct rxe_dev *rxe, struct ib_ah_attr *attr,
 		for (i = 0; i < 16; i++)
 			sprintf(addr+2*i, "%02x", attr->grh.dgid.raw[i]);
 
-		pr_info("rxe_net: non local subnet address not supported %s\n",
+		pr_info("rxe: non local subnet address not supported %s\n",
 			addr);
 		return -EINVAL;
 	}
@@ -317,7 +313,7 @@ void rxe_net_add(struct net_device *ndev)
 	if (err)
 		goto err2;
 
-	pr_info("rxe_net: added %s to %s\n",
+	pr_info("rxe: added %s to %s\n",
 		rxe->ib_dev.name, ndev->name);
 
 	net_info[ndev->ifindex].rxe = rxe;
@@ -352,7 +348,7 @@ void rxe_net_up(struct net_device *ndev)
 	port->attr.state = IB_PORT_ACTIVE;
 	port->attr.phys_state = IB_PHYS_STATE_LINK_UP;
 
-	pr_info("rxe_net: set %s active for %s\n",
+	pr_info("rxe: set %s active for %s\n",
 		rxe->ib_dev.name, ndev->name);
 out:
 	return;
@@ -379,7 +375,7 @@ void rxe_net_down(struct net_device *ndev)
 	port->attr.state = IB_PORT_DOWN;
 	port->attr.phys_state = 3;
 
-	pr_info("rxe_net: set %s down for %s\n",
+	pr_info("rxe: set %s down for %s\n",
 		rxe->ib_dev.name, ndev->name);
 out:
 	return;
@@ -447,7 +443,7 @@ static int rxe_notify(struct notifier_block *not_blk,
 	case NETDEV_CHANGEMTU:
 		rxe = net_to_rxe(ndev);
 		if (rxe) {
-			pr_info("rxe_net: %s changed mtu to %d\n",
+			pr_info("rxe: %s changed mtu to %d\n",
 				ndev->name, ndev->mtu);
 			rxe_set_mtu(rxe, ndev->mtu, net_to_port(ndev));
 		}
@@ -460,7 +456,7 @@ static int rxe_notify(struct notifier_block *not_blk,
 	case NETDEV_CHANGENAME:
 	case NETDEV_FEAT_CHANGE:
 	default:
-		pr_info("rxe_net: ignoring netdev event = %ld for %s\n",
+		pr_info("rxe: ignoring netdev event = %ld for %s\n",
 			event, ndev->name);
 		break;
 	}
@@ -517,14 +513,14 @@ static struct notifier_block rxe_net_notifier = {
 	.notifier_call = rxe_notify,
 };
 
-static int __init rxe_net_init(void)
+int rxe_net_init(void)
 {
 	int err;
 
 	spin_lock_init(&net_info_lock);
 
 	if (rxe_eth_proto_id != ETH_P_RXE)
-		pr_info("rxe_net: protoid set to 0x%x\n",
+		pr_info("rxe: protoid set to 0x%x\n",
 			rxe_eth_proto_id);
 
 	rxe_packet_type.type = cpu_to_be16(rxe_eth_proto_id);
@@ -532,18 +528,11 @@ static int __init rxe_net_init(void)
 
 	err = register_netdevice_notifier(&rxe_net_notifier);
 
-	pr_info("rxe_net: loaded\n");
-
 	return err;
 }
 
-static void __exit rxe_net_exit(void)
+void rxe_net_exit(void)
 {
 	unregister_netdevice_notifier(&rxe_net_notifier);
 	dev_remove_pack(&rxe_packet_type);
-
-	pr_info("rxe_net: unloaded\n");
 }
-
-module_init(rxe_net_init);
-module_exit(rxe_net_exit);
