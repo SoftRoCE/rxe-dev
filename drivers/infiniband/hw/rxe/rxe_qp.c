@@ -577,6 +577,8 @@ int rxe_qp_from_attr(struct rxe_qp *qp, struct ib_qp_attr *attr, int mask,
 {
 	int err;
 	struct rxe_dev *rxe = to_rdev(qp->ibqp.device);
+	union ib_gid sgid;
+	struct ib_gid_attr sgid_attr;
 
 	/* TODO should handle error by leaving old resources intact */
 	if (mask & IB_QP_MAX_QP_RD_ATOMIC) {
@@ -611,13 +613,28 @@ int rxe_qp_from_attr(struct rxe_qp *qp, struct ib_qp_attr *attr, int mask,
 		qp->attr.qkey = attr->qkey;
 
 	if (mask & IB_QP_AV) {
+		rcu_read_lock();
+		ib_get_cached_gid(&rxe->ib_dev, 1,
+				  attr->ah_attr.grh.sgid_index, &sgid,
+				  &sgid_attr);
+		rcu_read_unlock();
 		rxe_av_from_attr(rxe, attr->port_num, &qp->pri_av,
 				 &attr->ah_attr);
+		qp->pri_av.network_type = ib_gid_to_network_type(sgid_attr.gid_type, &sgid);
+		rxe_av_fill_ip_info(rxe, &qp->pri_av, &attr->ah_attr, &sgid);
 	}
 
 	if (mask & IB_QP_ALT_PATH) {
+		rcu_read_lock();
+		ib_get_cached_gid(&rxe->ib_dev, 1,
+				  attr->alt_ah_attr.grh.sgid_index, &sgid,
+				  &sgid_attr);
+		rcu_read_unlock();
+
 		rxe_av_from_attr(rxe, attr->alt_port_num, &qp->alt_av,
 				 &attr->alt_ah_attr);
+		qp->alt_av.network_type = ib_gid_to_network_type(sgid_attr.gid_type, &sgid);
+		rxe_av_fill_ip_info(rxe, &qp->alt_av, &attr->alt_ah_attr, &sgid);
 		qp->attr.alt_port_num = attr->alt_port_num;
 		qp->attr.alt_pkey_index = attr->alt_pkey_index;
 		qp->attr.alt_timeout = attr->alt_timeout;

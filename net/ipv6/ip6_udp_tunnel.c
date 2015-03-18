@@ -25,6 +25,14 @@ int udp_sock_create6(struct net *net, struct udp_port_cfg *cfg,
 
 	sk_change_net(sock->sk, net);
 
+	if (cfg->reuse_port) {
+		int opt = 1;
+		err = kernel_setsockopt(sock, SOL_SOCKET, SO_REUSEPORT,
+			(char *)&opt, sizeof(opt));
+		if (err < 0)
+			goto error;
+	}
+
 	udp6_addr.sin6_family = AF_INET6;
 	memcpy(&udp6_addr.sin6_addr, &cfg->local_ip6,
 	       sizeof(udp6_addr.sin6_addr));

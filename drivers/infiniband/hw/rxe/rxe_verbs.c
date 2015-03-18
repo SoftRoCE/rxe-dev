@@ -227,6 +227,8 @@ static struct ib_ah *rxe_create_ah(struct ib_pd *ibpd, struct ib_ah_attr *attr)
 	struct rxe_dev *rxe = to_rdev(ibpd->device);
 	struct rxe_pd *pd = to_rpd(ibpd);
 	struct rxe_ah *ah;
+	union ib_gid sgid;
+	struct ib_gid_attr sgid_attr;
 
 	err = rxe_av_chk_attr(rxe, attr);
 	if (err)
@@ -241,7 +243,23 @@ static struct ib_ah *rxe_create_ah(struct ib_pd *ibpd, struct ib_ah_attr *attr)
 	rxe_add_ref(pd);
 	ah->pd = pd;
 
+	rcu_read_lock();
+	err = ib_get_cached_gid(&rxe->ib_dev, attr->port_num,
+				attr->grh.sgid_index, &sgid,
+				&sgid_attr);
+	if (err) {
+		pr_err("Failed to query sgid. err = %d\n", err);
+		rcu_read_unlock();
+		goto err2;
+	}
+	rcu_read_unlock();
+
 	err = rxe_av_from_attr(rxe, attr->port_num, &ah->av, attr);
+	if (err)
+		goto err2;
+
+	ah->av.network_type = ib_gid_to_network_type(sgid_attr.gid_type, &sgid);
+	err = rxe_av_fill_ip_info(rxe, &ah->av, attr, &sgid);
 	if (err)
 		goto err2;
 
@@ -259,12 +277,30 @@ static int rxe_modify_ah(struct ib_ah *ibah, struct ib_ah_attr *attr)
 	int err;
 	struct rxe_dev *rxe = to_rdev(ibah->device);
 	struct rxe_ah *ah = to_rah(ibah);
+	union ib_gid sgid;
+	struct ib_gid_attr sgid_attr;
 
 	err = rxe_av_chk_attr(rxe, attr);
 	if (err)
 		goto err1;
 
+	rcu_read_lock();
+	err = ib_get_cached_gid(&rxe->ib_dev, attr->port_num,
+				attr->grh.sgid_index, &sgid,
+				&sgid_attr);
+	if (err) {
+		pr_err("Failed to query sgid. err = %d\n", err);
+		rcu_read_unlock();
+		goto err1;
+	}
+	rcu_read_unlock();
+
 	err = rxe_av_from_attr(rxe, attr->port_num, &ah->av, attr);
+	if (err)
+		goto err1;
+
+	ah->av.network_type = ib_gid_to_network_type(sgid_attr.gid_type, &sgid);
+	err = rxe_av_fill_ip_info(rxe, &ah->av, attr, &sgid);
 err1:
 	return err;
 }

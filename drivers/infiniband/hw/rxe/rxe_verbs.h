@@ -72,7 +72,12 @@ struct rxe_pd {
 struct rxe_av {
 	struct ib_ah_attr	attr;
 	u8			ll_addr[RXE_LL_ADDR_LEN];
-
+	u8			network_type;
+	union {
+		struct sockaddr		_sockaddr;
+		struct sockaddr_in	_sockaddr_in;
+		struct sockaddr_in6	_sockaddr_in6;
+	} sgid_addr, dgid_addr;
 };
 
 struct rxe_ah {

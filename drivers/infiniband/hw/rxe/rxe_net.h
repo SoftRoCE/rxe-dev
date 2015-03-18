@@ -38,23 +38,6 @@
 #include <net/if_inet6.h>
 #include <linux/module.h>
 
-/*
- * this should be defined in .../include/linux/if_ether.h
- */
-#define ETH_P_RXE			(0x8915)
-
-/*
- * this should be defined in .../include/linux/netfilter.h
- * to a specific value
- */
-#define NFPROTO_RXE			(0)
-
-/*
- * these should be defined in .../include/linux/netfilter_rxe.h
- */
-#define NF_RXE_IN			(0)
-#define NF_RXE_OUT			(1)
-
 /* Should probably move to something other than an array...these can be big */
 #define RXE_MAX_IF_INDEX	(384)
 
@@ -65,6 +48,12 @@ struct rxe_net_info {
 	int			status;
 };
 
+struct rxe_addr_info {
+	struct socket *sock4;
+	struct socket *sock6;
+};
+
+extern struct rxe_addr_info addr_info;
 extern struct rxe_net_info net_info[RXE_MAX_IF_INDEX];
 extern spinlock_t net_info_lock;
 

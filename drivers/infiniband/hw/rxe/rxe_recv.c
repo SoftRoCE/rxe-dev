@@ -151,10 +151,6 @@ err1:
 static int check_addr(struct rxe_dev *rxe, struct rxe_pkt_info *pkt,
 		      struct rxe_qp *qp)
 {
-	struct rxe_port *port = &rxe->port[pkt->port_num - 1];
-	union ib_gid *sgid;
-	union ib_gid *dgid;
-
 	if (qp_type(qp) != IB_QPT_RC && qp_type(qp) != IB_QPT_UC)
 		goto done;
 
@@ -164,51 +160,6 @@ static int check_addr(struct rxe_dev *rxe, struct rxe_pkt_info *pkt,
 		goto err1;
 	}
 
-	if ((pkt->mask & RXE_GRH_MASK) == 0) {
-		if (unlikely(qp->pri_av.attr.ah_flags & IB_AH_GRH)) {
-			pr_warn("no grh for global qp\n");
-			goto err1;
-		} else {
-			goto done;
-		}
-	}
-
-	sgid = grh_sgid(pkt);
-	dgid = grh_dgid(pkt);
-
-	if (unlikely((qp->pri_av.attr.ah_flags & IB_AH_GRH) == 0)) {
-		pr_warn("grh for local qp\n");
-		goto err1;
-	}
-
-	if (unlikely(dgid->global.subnet_prefix == 0 &&
-		     be64_to_cpu(dgid->global.interface_id) <= 1)) {
-		pr_warn("bad dgid, subnet_prefix = 0\n");
-		goto err1;
-	}
-
-	if (unlikely(sgid->raw[0] == 0xff)) {
-		pr_warn("bad sgid, multicast gid\n");
-		goto err1;
-	}
-
-	if (unlikely(sgid->global.subnet_prefix == 0 &&
-		     be64_to_cpu(sgid->global.interface_id) <= 1)) {
-		pr_warn("bad sgid, subnet prefix = 0 or 1\n");
-		goto err1;
-	}
-
-	if (unlikely(dgid->global.interface_id !=
-	    port->guid_tbl[qp->pri_av.attr.grh.sgid_index])) {
-		pr_warn("bad dgid, doesn't match qp\n");
-		goto err1;
-	}
-
-	if (unlikely(sgid->global.interface_id !=
-	    qp->pri_av.attr.grh.dgid.global.interface_id)) {
-		pr_warn("bad sgid, doesn't match qp\n");
-		goto err1;
-	}
 done:
 	return 0;
 
@@ -243,20 +194,6 @@ static int hdr_check(struct rxe_pkt_info *pkt)
 		err = check_type_state(rxe, pkt, qp);
 		if (unlikely(err))
 			goto err2;
-	}
-
-	if (pkt->mask & RXE_GRH_MASK) {
-		dgid = grh_dgid(pkt);
-
-		if (unlikely(grh_next_hdr(pkt) != GRH_RXE_NEXT_HDR)) {
-			pr_warn("bad next hdr\n");
-			goto err2;
-		}
-
-		if (unlikely(grh_ipver(pkt) != GRH_IPV6)) {
-			pr_warn("bad ipver\n");
-			goto err2;
-		}
 	}
 
 	if (qpn != IB_MULTICAST_QPN) {
@@ -309,7 +246,7 @@ static void rxe_rcv_mcast_pkt(struct rxe_dev *rxe, struct sk_buff *skb)
 	int err;
 
 	/* lookup mcast group corresponding to mgid, takes a ref */
-	mcg = rxe_pool_get_key(&rxe->mc_grp_pool, grh_dgid(pkt));
+	mcg = rxe_pool_get_key(&rxe->mc_grp_pool, &pkt->av->attr.grh.dgid);
 	if (!mcg)
 		goto err1;	/* mcast group not registered */
 
@@ -352,14 +289,7 @@ err1:
 		kfree_skb(skb);
 }
 
-/* rxe_rcv is called from the interface driver
- * on entry
- *	pkt->rxe	= rdma device
- *	pkt->port_num	= rdma device port
- * For rxe_net:
- *	pkt->mask	= RXE_GRH_MASK
- *	pkt->hdr	= &grh	with no lrh
- */
+/* rxe_rcv is called from the interface driver */
 int rxe_rcv(struct sk_buff *skb)
 {
 	int err;
@@ -367,31 +297,6 @@ int rxe_rcv(struct sk_buff *skb)
 	struct rxe_dev *rxe = pkt->rxe;
 
 	pkt->offset = 0;
-
-	if (pkt->mask & RXE_LRH_MASK) {
-		unsigned int length = __lrh_length(pkt->hdr);
-		unsigned int lnh = __lrh_lnh(pkt->hdr);
-
-		if (skb->len < RXE_LRH_BYTES)
-			goto drop;
-
-		if (lnh < LRH_LNH_IBA_LOC)
-			goto drop;
-
-		pkt->paylen = 4*length - RXE_LRH_BYTES;
-		pkt->offset += RXE_LRH_BYTES;
-
-		if (lnh == LRH_LNH_IBA_GBL)
-			pkt->mask |= RXE_GRH_MASK;
-	}
-
-	if (pkt->mask & RXE_GRH_MASK) {
-		if (skb->len < pkt->offset + RXE_GRH_BYTES)
-			goto drop;
-
-		pkt->paylen = __grh_paylen(pkt->hdr);
-		pkt->offset += RXE_GRH_BYTES;
-	}
 
 	if (unlikely(skb->len < pkt->offset + RXE_BTH_BYTES))
 		goto drop;

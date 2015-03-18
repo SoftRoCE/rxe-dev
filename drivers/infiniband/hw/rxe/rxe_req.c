@@ -385,8 +385,6 @@ static struct rxe_pkt_info *init_req_packet(struct rxe_qp *qp,
 	u16			pkey;
 	u32			qp_num;
 	int			ack_req;
-	unsigned int		lnh;
-	unsigned int		length;
 
 	/* length from start of bth to end of icrc */
 	paylen = rxe_opcode[opcode].length + payload + pad + RXE_ICRC_SIZE;
@@ -397,8 +395,7 @@ static struct rxe_pkt_info *init_req_packet(struct rxe_qp *qp,
 	else
 		av = &wqe->av;
 
-	/* init skb
-	 * ifc layer must set lrh/grh flags */
+	/* init skb */
 	skb = rxe->ifc_ops->init_packet(rxe, av, paylen);
 	if (!skb)
 		return NULL;
@@ -415,36 +412,6 @@ static struct rxe_pkt_info *init_req_packet(struct rxe_qp *qp,
 	pkt->mask	|= rxe_opcode[opcode].mask;
 	pkt->paylen	= paylen;
 	pkt->offset	= 0;
-
-	/* init lrh */
-	if (pkt->mask & RXE_LRH_MASK) {
-		pkt->offset += RXE_LRH_BYTES;
-		lnh = (pkt->mask & RXE_GRH_MASK) ? LRH_LNH_IBA_GBL
-						 : LRH_LNH_IBA_LOC;
-		length = paylen + RXE_LRH_BYTES;
-		if (pkt->mask & RXE_GRH_MASK)
-			length += RXE_GRH_BYTES;
-
-		/* TODO currently we do not implement SL->VL
-		   table so just force VL=SL */
-		lrh_init(pkt, av->attr.sl, av->attr.sl,
-			 lnh, length/4,
-			 av->attr.dlid,
-			 port->attr.lid);
-	}
-
-	/* init grh */
-	if (pkt->mask & RXE_GRH_MASK) {
-		pkt->offset += RXE_GRH_BYTES;
-
-		/* TODO set class flow hopcount */
-		grh_init(pkt, 0, 0, paylen, 0);
-
-		grh_set_sgid(pkt, port->subnet_prefix,
-			     port->guid_tbl[av->attr.grh.sgid_index]);
-		grh_set_dgid(pkt, av->attr.grh.dgid.global.subnet_prefix,
-			     av->attr.grh.dgid.global.interface_id);
-	}
 
 	/* init bth */
 	solicited = (ibwr->send_flags & IB_SEND_SOLICITED) &&
