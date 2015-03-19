@@ -284,10 +284,9 @@ static int send(struct rxe_dev *rxe, struct sk_buff *skb)
 	return -1;
 }
 
-static int loopback(struct rxe_dev *rxe, struct sk_buff *skb)
+static int loopback(struct sk_buff *skb)
 {
-	/*TODO: implement loopback */
-	return 0;
+	return rxe_rcv(skb);
 }
 
 static inline int addr_same(struct rxe_dev *rxe, struct rxe_av *av)

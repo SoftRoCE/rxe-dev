@@ -454,7 +454,7 @@ struct rxe_ifc_ops {
 	int (*mcast_add)(struct rxe_dev *rxe, union ib_gid *mgid);
 	int (*mcast_delete)(struct rxe_dev *rxe, union ib_gid *mgid);
 	int (*send)(struct rxe_dev *rxe, struct sk_buff *skb);
-	int (*loopback)(struct rxe_dev *rxe, struct sk_buff *skb);
+	int (*loopback)(struct sk_buff *skb);
 	struct sk_buff *(*init_packet)(struct rxe_dev *rxe, struct rxe_av *av,
 				       int paylen);
 	int (*init_av)(struct rxe_dev *rxe, struct ib_ah_attr *attr,
