@@ -108,7 +108,7 @@ struct rxe_wr_opcode_info rxe_wr_opcode_info[] = {
 	[IB_WR_RDMA_READ_WITH_INV]			= {
 		.name	= "IB_WR_RDMA_READ_WITH_INV",
 		.mask	= {
-			[IB_QPT_RC]	= WR_READ_MASK | WR_READ_MASK,
+			[IB_QPT_RC]	= WR_READ_MASK,
 		},
 	},
 	[IB_WR_LOCAL_INV]				= {
