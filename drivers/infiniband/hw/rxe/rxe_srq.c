@@ -126,7 +126,7 @@ int rxe_srq_from_init(struct rxe_dev *rxe, struct rxe_srq *srq,
 	spin_lock_init(&srq->rq.producer_lock);
 	spin_lock_init(&srq->rq.consumer_lock);
 
-	q = rxe_queue_init(rxe, (unsigned int *)&srq->rq.max_wr,
+	q = rxe_queue_init(rxe, &srq->rq.max_wr,
 			   srq_wqe_size);
 	if (!q) {
 		pr_warn("unable to allocate queue for srq\n");

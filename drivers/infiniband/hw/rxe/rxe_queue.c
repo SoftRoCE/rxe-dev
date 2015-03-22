@@ -76,7 +76,7 @@ err1:
 }
 
 struct rxe_queue *rxe_queue_init(struct rxe_dev *rxe,
-				 unsigned int *num_elem,
+				 int *num_elem,
 				 unsigned int elem_size)
 {
 	struct rxe_queue *q;

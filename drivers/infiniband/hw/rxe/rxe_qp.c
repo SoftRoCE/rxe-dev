@@ -249,7 +249,7 @@ static int rxe_qp_init_req(struct rxe_dev *rxe, struct rxe_qp *qp,
 					qp->sq.max_inline);
 
 	qp->sq.queue		= rxe_queue_init(rxe,
-						 (unsigned int *)&qp->sq.max_wr,
+						 &qp->sq.max_wr,
 						 wqe_size);
 	if (!qp->sq.queue)
 		return -ENOMEM;
@@ -306,7 +306,7 @@ static int rxe_qp_init_resp(struct rxe_dev *rxe, struct rxe_qp *qp,
 			 qp->rq.max_wr, qp->rq.max_sge, wqe_size);
 
 		qp->rq.queue		= rxe_queue_init(rxe,
-						(unsigned int *)&qp->rq.max_wr,
+						&qp->rq.max_wr,
 						wqe_size);
 		if (!qp->rq.queue)
 			return -ENOMEM;
