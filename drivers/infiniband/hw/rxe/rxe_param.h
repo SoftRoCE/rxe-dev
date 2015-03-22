@@ -57,6 +57,19 @@ static inline int rxe_mtu_enum_to_int(enum rxe_mtu mtu)
 	}
 }
 
+static inline enum ib_mtu rxe_mtu_to_ib_mtu(enum rxe_mtu mtu)
+{
+	switch (mtu) {
+	case RXE_MTU_256:	return	IB_MTU_256;
+	case RXE_MTU_512:	return	IB_MTU_512;
+	case RXE_MTU_1024:	return	IB_MTU_1024;
+	case RXE_MTU_2048:	return	IB_MTU_2048;
+	case RXE_MTU_4096:
+	case RXE_MTU_8192:	return	IB_MTU_4096;
+	default:		return -1;
+	}
+}
+
 static inline enum rxe_mtu rxe_mtu_int_to_enum(int mtu)
 {
 	if (mtu < 256)
