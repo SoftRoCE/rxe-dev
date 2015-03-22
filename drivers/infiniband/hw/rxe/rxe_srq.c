@@ -148,7 +148,7 @@ int rxe_srq_from_init(struct rxe_dev *rxe, struct rxe_srq *srq,
 		return 0;
 
 err2:
-	vfree(q->buf);
+	kvfree(q->buf);
 	kfree(q);
 err1:
 	return err;

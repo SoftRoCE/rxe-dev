@@ -103,7 +103,7 @@ int rxe_cq_from_init(struct rxe_dev *rxe, struct rxe_cq *cq, int cqe,
 	err = do_mmap_info(rxe, udata, 0, context, cq->queue->buf,
 			   cq->queue->buf_size, &cq->queue->ip);
 	if (err) {
-		vfree(cq->queue->buf);
+		kvfree(cq->queue->buf);
 		kfree(cq->queue);
 		return err;
 	}
