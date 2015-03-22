@@ -377,9 +377,9 @@ int rxe_set_mtu(struct rxe_dev *rxe, unsigned int ndev_mtu,
 	mtu = eth_mtu_int_to_enum(ndev_mtu);
 
 	/* Make sure that new MTU in range */
-	mtu = mtu ? min_t(enum rxe_mtu, mtu, port->attr.max_mtu): RXE_MTU_256;
+	mtu = mtu ? min_t(enum rxe_mtu, mtu, RXE_PORT_MAX_MTU): RXE_MTU_256;
 
-	port->attr.active_mtu = (enum ib_mtu __force)mtu;
+	port->attr.active_mtu = rxe_mtu_to_ib_mtu(mtu);
 	port->mtu_cap = rxe_mtu_enum_to_int(mtu);
 
 	return 0;
