@@ -46,6 +46,7 @@
 #include <rdma/ib_cache.h>
 #include <rdma/ib_addr.h>
 
+#include "rxe_net.h"
 #include "rxe_opcode.h"
 #include "rxe_hdr.h"
 #include "rxe_param.h"
