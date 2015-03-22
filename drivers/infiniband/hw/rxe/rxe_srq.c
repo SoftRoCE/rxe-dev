@@ -80,7 +80,7 @@ int rxe_srq_chk_attr(struct rxe_dev *rxe, struct rxe_srq *srq,
 			goto err1;
 		}
 
-		if (attr->srq_limit > srq->rq.queue->buf->index_mask) {
+		if (srq && (attr->srq_limit > srq->rq.queue->buf->index_mask)) {
 			pr_warn("srq_limit (%d) > cur limit(%d)\n",
 				attr->srq_limit,
 				 srq->rq.queue->buf->index_mask);
