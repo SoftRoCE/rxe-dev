@@ -105,6 +105,7 @@ int rxe_cq_from_init(struct rxe_dev *rxe, struct rxe_cq *cq, int cqe,
 	if (err) {
 		vfree(cq->queue->buf);
 		kfree(cq->queue);
+		return err;
 	}
 
 	if (udata)
