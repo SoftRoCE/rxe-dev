@@ -73,4 +73,7 @@ void rxe_net_add(struct net_device *ndev);
 void rxe_net_up(struct net_device *ndev);
 void rxe_net_down(struct net_device *ndev);
 
+int rxe_net_init(void);
+void rxe_net_exit(void);
+
 #endif /* RXE_NET_H */

@@ -219,7 +219,7 @@ static struct socket *rxe_setup_udp_tunnel(struct net *net, bool ipv6,
 		udp_cfg.local_ip.s_addr = htonl(INADDR_ANY);
 	}
 
-	udp_cfg.local_udp_port = htons(port);
+	udp_cfg.local_udp_port = port;
 
 	/* Create UDP socket */
 	err = udp_sock_create(net, &udp_cfg, &sock);
@@ -251,7 +251,7 @@ static int send(struct rxe_dev *rxe, struct sk_buff *skb)
 	struct rxe_av *av = pkt->av;
 
 	if (av->network_type == RDMA_NETWORK_IPV4) {
-		int df = 0;
+		__be16 df = 0;
 		bool xnet = false;
 		struct in_addr *saddr = &av->sgid_addr._sockaddr_in.sin_addr;
 		struct in_addr *daddr = &av->dgid_addr._sockaddr_in.sin_addr;
@@ -579,14 +579,16 @@ int rxe_net_init(void)
 
 	spin_lock_init(&net_info_lock);
 
-	addr_info.sock4 = rxe_setup_udp_tunnel(&init_net, 0, ROCE_V2_UDP_DPORT);
+	addr_info.sock4 = rxe_setup_udp_tunnel(&init_net, 0,
+					       htons(ROCE_V2_UDP_DPORT));
 	if (IS_ERR(addr_info.sock4)) {
 		addr_info.sock4 = NULL;
 		pr_err("rxe: Failed to create IPv4 UDP tunnel\n");
 		return -1;
 	}
 
-	addr_info.sock6 = rxe_setup_udp_tunnel(&init_net, 1, ROCE_V2_UDP_DPORT);
+	addr_info.sock6 = rxe_setup_udp_tunnel(&init_net, 1,
+					       htons(ROCE_V2_UDP_DPORT));
 	if (IS_ERR(addr_info.sock6)) {
 		addr_info.sock6 = NULL;
 		rxe_release_udp_tunnel(addr_info.sock4);
