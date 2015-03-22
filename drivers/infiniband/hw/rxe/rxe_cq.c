@@ -93,7 +93,7 @@ int rxe_cq_from_init(struct rxe_dev *rxe, struct rxe_cq *cq, int cqe,
 {
 	int err;
 
-	cq->queue = rxe_queue_init(rxe, (unsigned int *)&cqe,
+	cq->queue = rxe_queue_init(rxe, &cqe,
 				   sizeof(struct rxe_cqe));
 	if (!cq->queue) {
 		pr_warn("unable to create cq\n");
