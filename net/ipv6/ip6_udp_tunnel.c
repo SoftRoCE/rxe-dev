@@ -105,8 +105,7 @@ int udp_tunnel6_xmit_skb(struct dst_entry *dst, struct sk_buff *skb,
 	ip6h->daddr	  = *daddr;
 	ip6h->saddr	  = *saddr;
 
-	ip6tunnel_xmit(skb, dev);
-	return 0;
+	return ip6tunnel_xmit(skb, dev);
 }
 EXPORT_SYMBOL_GPL(udp_tunnel6_xmit_skb);
 
