@@ -73,7 +73,7 @@ __u32 ip6_tnl_get_cap(struct ip6_tnl *t, const struct in6_addr *laddr,
 struct net *ip6_tnl_get_link_net(const struct net_device *dev);
 int ip6_tnl_get_iflink(const struct net_device *dev);
 
-static inline void ip6tunnel_xmit(struct sock *sk, struct sk_buff *skb,
+static inline int ip6tunnel_xmit(struct sock *sk, struct sk_buff *skb,
 				  struct net_device *dev)
 {
 	struct net_device_stats *stats = &dev->stats;
@@ -82,7 +82,7 @@ static inline void ip6tunnel_xmit(struct sock *sk, struct sk_buff *skb,
 	pkt_len = skb->len;
 	err = ip6_local_out_sk(sk, skb);
 
-	if (net_xmit_eval(err) == 0) {
+	if (likely(net_xmit_eval(err) == 0)) {
 		struct pcpu_sw_netstats *tstats = this_cpu_ptr(dev->tstats);
 		u64_stats_update_begin(&tstats->syncp);
 		tstats->tx_bytes += pkt_len;
@@ -91,6 +91,10 @@ static inline void ip6tunnel_xmit(struct sock *sk, struct sk_buff *skb,
 	} else {
 		stats->tx_errors++;
 		stats->tx_aborted_errors++;
+
+		return 0;
 	}
+
+	return pkt_len;
 }
 #endif
