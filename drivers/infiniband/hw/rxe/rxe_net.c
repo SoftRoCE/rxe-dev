@@ -246,9 +246,15 @@ static void rxe_release_udp_tunnel(struct socket *sk)
 
 static int send(struct rxe_dev *rxe, struct sk_buff *skb)
 {
+	int sent_bytes = 0;
+	struct sk_buff *nskb;
 	bool csum_nocheck = true;
 	struct rxe_pkt_info *pkt = SKB_TO_PKT(skb);
 	struct rxe_av *av = pkt->av;
+
+	nskb = skb_clone(skb, GFP_ATOMIC);
+	if (!nskb)
+		return -ENOMEM;
 
 	if (av->network_type == RDMA_NETWORK_IPV4) {
 		__be16 df = 0;
@@ -257,14 +263,14 @@ static int send(struct rxe_dev *rxe, struct sk_buff *skb)
 		struct in_addr *daddr = &av->dgid_addr._sockaddr_in.sin_addr;
 		struct rtable *rt = rxe_find_route4(saddr, daddr);
 
-		return udp_tunnel_xmit_skb(rt, skb, saddr->s_addr,
-					   daddr->s_addr,
-					   av->attr.grh.traffic_class,
-					   av->attr.grh.hop_limit,
-					   df, htons(0xc000),
-					   htons(ROCE_V2_UDP_DPORT),
-					   xnet,
-					   csum_nocheck);
+		sent_bytes = udp_tunnel_xmit_skb(rt, nskb, saddr->s_addr,
+						 daddr->s_addr,
+						 av->attr.grh.traffic_class,
+						 av->attr.grh.hop_limit,
+						 df, htons(0xc000),
+						 htons(ROCE_V2_UDP_DPORT),
+						 xnet,
+						 csum_nocheck);
 
 	} else if (av->network_type == RDMA_NETWORK_IPV6) {
 		struct in6_addr *saddr = &av->sgid_addr._sockaddr_in6.sin6_addr;
@@ -272,16 +278,21 @@ static int send(struct rxe_dev *rxe, struct sk_buff *skb)
 		struct dst_entry *dst = rxe_find_route6(rxe->ndev,
 							saddr, daddr);
 
-		return udp_tunnel6_xmit_skb(dst, skb, rxe->ndev,
-					    saddr, daddr,
-					    av->attr.grh.traffic_class,
-					    av->attr.grh.hop_limit,
-					    htons(0xc000),
-					    htons(ROCE_V2_UDP_DPORT),
-					    csum_nocheck);
+		sent_bytes = udp_tunnel6_xmit_skb(dst, nskb, rxe->ndev,
+						  saddr, daddr,
+						  av->attr.grh.traffic_class,
+						  av->attr.grh.hop_limit,
+						  htons(0xc000),
+						  htons(ROCE_V2_UDP_DPORT),
+						  csum_nocheck);
 	}
 
-	return -1;
+	if (sent_bytes > 0) {
+		kfree_skb(skb);
+		return 0;
+	}
+
+	return sent_bytes < 0 ? sent_bytes : -EAGAIN;
 }
 
 static int loopback(struct sk_buff *skb)
