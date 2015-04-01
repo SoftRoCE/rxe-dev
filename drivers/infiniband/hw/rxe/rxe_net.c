@@ -193,6 +193,7 @@ static int rxe_udp_encap_recv(struct sock *sk, struct sk_buff *skb)
 	pkt->port_num = net_to_port(ndev);
 	pkt->hdr = (u8 *)(udph + 1);
 	pkt->mask = RXE_GRH_MASK;
+	pkt->paylen = be16_to_cpu(udph->len) - sizeof(*udph);
 
 	return rxe_rcv(skb);
 drop:
@@ -350,24 +351,6 @@ static struct sk_buff *init_packet(struct rxe_dev *rxe, struct rxe_av *av,
 static int init_av(struct rxe_dev *rxe, struct ib_ah_attr *attr,
 		   struct rxe_av *av)
 {
-	struct in6_addr *in6 = (struct in6_addr *)attr->grh.dgid.raw;
-
-	if (rdma_link_local_addr(in6)) {
-		rdma_get_ll_mac(in6, av->ll_addr);
-	} else if (rdma_is_multicast_addr(in6)) {
-		rdma_get_mcast_mac(in6, av->ll_addr);
-	} else {
-		int i;
-		char addr[64];
-
-		for (i = 0; i < 16; i++)
-			sprintf(addr+2*i, "%02x", attr->grh.dgid.raw[i]);
-
-		pr_info("rxe: non local subnet address not supported %s\n",
-			addr);
-		return -EINVAL;
-	}
-
 	return 0;
 }
 
