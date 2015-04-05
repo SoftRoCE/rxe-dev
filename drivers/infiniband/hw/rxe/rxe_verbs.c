@@ -459,9 +459,10 @@ static int rxe_post_srq_recv(struct ib_srq *ibsrq, struct ib_recv_wr *wr,
 			     struct ib_recv_wr **bad_wr)
 {
 	int err = 0;
+	unsigned long flags;
 	struct rxe_srq *srq = to_rsrq(ibsrq);
 
-	spin_lock_bh(&srq->rq.producer_lock);
+	spin_lock_irqsave(&srq->rq.producer_lock, flags);
 
 	while (wr) {
 		err = post_one_recv(&srq->rq, wr);
@@ -470,7 +471,7 @@ static int rxe_post_srq_recv(struct ib_srq *ibsrq, struct ib_recv_wr *wr,
 		wr = wr->next;
 	}
 
-	spin_unlock_bh(&srq->rq.producer_lock);
+	spin_unlock_irqrestore(&srq->rq.producer_lock, flags);
 
 	if (err)
 		*bad_wr = wr;
@@ -637,12 +638,13 @@ static int post_one_send(struct rxe_qp *qp, struct ib_send_wr *ibwr,
 	int err;
 	struct rxe_sq *sq = &qp->sq;
 	struct rxe_send_wqe *send_wqe;
+	unsigned long flags;
 
 	err = validate_send_wr(qp, ibwr, mask, length);
 	if (err)
 		return err;
 
-	spin_lock_bh(&qp->sq.sq_lock);
+	spin_lock_irqsave(&qp->sq.sq_lock, flags);
 
 	if (unlikely(queue_full(sq->queue))) {
 		err = -ENOMEM;
@@ -660,12 +662,12 @@ static int post_one_send(struct rxe_qp *qp, struct ib_send_wr *ibwr,
 	wmb();
 
 	advance_producer(sq->queue);
-	spin_unlock_bh(&qp->sq.sq_lock);
+	spin_unlock_irqrestore(&qp->sq.sq_lock, flags);
 
 	return 0;
 
 err1:
-	spin_unlock_bh(&qp->sq.sq_lock);
+	spin_unlock_irqrestore(&qp->sq.sq_lock, flags);
 	return err;
 }
 
@@ -729,6 +731,7 @@ static int rxe_post_recv(struct ib_qp *ibqp, struct ib_recv_wr *wr,
 	int err = 0;
 	struct rxe_qp *qp = to_rqp(ibqp);
 	struct rxe_rq *rq = &qp->rq;
+	unsigned long flags;
 
 	if (unlikely((qp_state(qp) < IB_QPS_INIT) || !qp->valid)) {
 		*bad_wr = wr;
@@ -748,7 +751,7 @@ static int rxe_post_recv(struct ib_qp *ibqp, struct ib_recv_wr *wr,
 		goto err1;
 	}
 
-	spin_lock_bh(&rq->producer_lock);
+	spin_lock_irqsave(&rq->producer_lock, flags);
 
 	while (wr) {
 		err = post_one_recv(rq, wr);
@@ -759,7 +762,7 @@ static int rxe_post_recv(struct ib_qp *ibqp, struct ib_recv_wr *wr,
 		wr = wr->next;
 	}
 
-	spin_unlock_bh(&rq->producer_lock);
+	spin_unlock_irqrestore(&rq->producer_lock, flags);
 
 err1:
 	return err;

@@ -59,24 +59,25 @@ void rxe_do_task(unsigned long data)
 {
 	int cont;
 	int ret;
+	unsigned long flags;
 	struct rxe_task *task = (struct rxe_task *)data;
 
-	spin_lock_bh(&task->state_lock);
+	spin_lock_irqsave(&task->state_lock, flags);
 	switch (task->state) {
 	case TASK_STATE_START:
 		task->state = TASK_STATE_BUSY;
-		spin_unlock_bh(&task->state_lock);
+		spin_unlock_irqrestore(&task->state_lock, flags);
 		break;
 
 	case TASK_STATE_BUSY:
 		task->state = TASK_STATE_ARMED;
 		/* fall through to */
 	case TASK_STATE_ARMED:
-		spin_unlock_bh(&task->state_lock);
+		spin_unlock_irqrestore(&task->state_lock, flags);
 		return;
 
 	default:
-		spin_unlock_bh(&task->state_lock);
+		spin_unlock_irqrestore(&task->state_lock, flags);
 		pr_warn("bad state = %d in rxe_do_task\n", task->state);
 		return;
 	}
@@ -85,7 +86,7 @@ void rxe_do_task(unsigned long data)
 		cont = 0;
 		ret = task->func(task->arg);
 
-		spin_lock_bh(&task->state_lock);
+		spin_lock_irqsave(&task->state_lock, flags);
 		switch (task->state) {
 		case TASK_STATE_BUSY:
 			if (ret)
@@ -106,7 +107,7 @@ void rxe_do_task(unsigned long data)
 			pr_warn("bad state = %d in rxe_do_task\n",
 				task->state);
 		}
-		spin_unlock_bh(&task->state_lock);
+		spin_unlock_irqrestore(&task->state_lock, flags);
 	} while (cont);
 
 	task->ret = ret;
