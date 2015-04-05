@@ -135,11 +135,12 @@ int rxe_cq_resize_queue(struct rxe_cq *cq, int cqe, struct ib_udata *udata)
 int rxe_cq_post(struct rxe_cq *cq, struct rxe_cqe *cqe, int solicited)
 {
 	struct ib_event ev;
+	unsigned long flags;
 
-	spin_lock_bh(&cq->cq_lock);
+	spin_lock_irqsave(&cq->cq_lock, flags);
 
 	if (unlikely(queue_full(cq->queue))) {
-		spin_unlock_bh(&cq->cq_lock);
+		spin_unlock_irqrestore(&cq->cq_lock, flags);
 		if (cq->ibcq.event_handler) {
 			ev.device = cq->ibcq.device;
 			ev.element.cq = &cq->ibcq;
@@ -157,7 +158,7 @@ int rxe_cq_post(struct rxe_cq *cq, struct rxe_cqe *cqe, int solicited)
 	wmb();
 
 	advance_producer(cq->queue);
-	spin_unlock_bh(&cq->cq_lock);
+	spin_unlock_irqrestore(&cq->cq_lock, flags);
 
 	if ((cq->notify == IB_CQ_NEXT_COMP) ||
 	    (cq->notify == IB_CQ_SOLICITED && solicited)) {

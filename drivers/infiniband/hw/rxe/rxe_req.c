@@ -126,15 +126,17 @@ void rnr_nak_timer(unsigned long data)
 static struct rxe_send_wqe *req_next_wqe(struct rxe_qp *qp)
 {
 	struct rxe_send_wqe *wqe = queue_head(qp->sq.queue);
+	unsigned long flags;
 
 	if (unlikely(qp->req.state == QP_STATE_DRAIN)) {
 		/* check to see if we are drained;
 		 * state_lock used by requester and completer */
-		spin_lock_bh(&qp->state_lock);
+		spin_lock_irqsave(&qp->state_lock, flags);
 		do {
 			if (qp->req.state != QP_STATE_DRAIN) {
 				/* comp just finished */
-				spin_unlock_bh(&qp->state_lock);
+				spin_unlock_irqrestore(&qp->state_lock,
+						       flags);
 				break;
 			}
 
@@ -142,12 +144,13 @@ static struct rxe_send_wqe *req_next_wqe(struct rxe_qp *qp)
 				consumer_index(qp->sq.queue)) ||
 				(wqe->state != wqe_state_posted))) {
 				/* comp not done yet */
-				spin_unlock_bh(&qp->state_lock);
+				spin_unlock_irqrestore(&qp->state_lock,
+						       flags);
 				break;
 			}
 
 			qp->req.state = QP_STATE_DRAINED;
-			spin_unlock_bh(&qp->state_lock);
+			spin_unlock_irqrestore(&qp->state_lock, flags);
 
 			if (qp->ibqp.event_handler) {
 				struct ib_event ev;
