@@ -34,9 +34,10 @@
 #include "rxe.h"
 #include "rxe_loc.h"
 
-MODULE_AUTHOR("Bob Pearson, Frank Zago, John Groves");
+MODULE_AUTHOR("Bob Pearson, Frank Zago, John Groves, Kamal Heib");
 MODULE_DESCRIPTION("Soft RDMA transport");
 MODULE_LICENSE("Dual BSD/GPL");
+MODULE_VERSION("0.1");
 
 /* free resources for all ports on a device */
 static void rxe_cleanup_ports(struct rxe_dev *rxe)
