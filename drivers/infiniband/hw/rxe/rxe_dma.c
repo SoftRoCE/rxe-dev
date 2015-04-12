@@ -45,7 +45,7 @@ static u64 rxe_dma_map_single(struct ib_device *dev,
 			      enum dma_data_direction direction)
 {
 	BUG_ON(!valid_dma_direction(direction));
-	return (u64)(uintptr_t)cpu_addr;
+	return (u64) cpu_addr;
 }
 
 static void rxe_dma_unmap_single(struct ib_device *dev,
@@ -60,18 +60,20 @@ static u64 rxe_dma_map_page(struct ib_device *dev,
 			    unsigned long offset,
 			    size_t size, enum dma_data_direction direction)
 {
-	u64 addr = 0;
+	u64 addr;
 
 	BUG_ON(!valid_dma_direction(direction));
 
-	if (offset + size > PAGE_SIZE)
-		goto out;
+	if (offset + size > PAGE_SIZE) {
+		addr = DMA_BAD_ADDER;
+		goto done;
+	}
 
-	addr = (uintptr_t)page_address(page);
+	addr = (u64) page_address(page);
 	if (addr)
 		addr += offset;
 
-out:
+done:
 	return addr;
 }
 
@@ -93,12 +95,16 @@ static int rxe_map_sg(struct ib_device *dev, struct scatterlist *sgl,
 	BUG_ON(!valid_dma_direction(direction));
 
 	for_each_sg(sgl, sg, nents, i) {
-		addr = (uintptr_t)page_address(sg_page(sg));
+		addr = (u64) page_address(sg_page(sg));
 		/* TODO: handle highmem pages */
 		if (!addr) {
 			ret = 0;
 			break;
 		}
+		sg->dma_address = addr + sg->offset;
+#ifdef CONFIG_NEED_SG_DMA_LENGTH
+		sg->dma_length = sg->length;
+#endif
 	}
 
 	return ret;
@@ -134,7 +140,7 @@ static void *rxe_dma_alloc_coherent(struct ib_device *dev, size_t size,
 		addr = page_address(p);
 
 	if (dma_handle)
-		*dma_handle = (uintptr_t)addr;
+		*dma_handle = (u64) addr;
 
 	return addr;
 }
@@ -142,19 +148,19 @@ static void *rxe_dma_alloc_coherent(struct ib_device *dev, size_t size,
 static void rxe_dma_free_coherent(struct ib_device *dev, size_t size,
 				  void *cpu_addr, u64 dma_handle)
 {
-	free_pages((unsigned long)cpu_addr, get_order(size));
+	free_pages((unsigned long) cpu_addr, get_order(size));
 }
 
 struct ib_dma_mapping_ops rxe_dma_mapping_ops = {
-	rxe_mapping_error,
-	rxe_dma_map_single,
-	rxe_dma_unmap_single,
-	rxe_dma_map_page,
-	rxe_dma_unmap_page,
-	rxe_map_sg,
-	rxe_unmap_sg,
-	rxe_sync_single_for_cpu,
-	rxe_sync_single_for_device,
-	rxe_dma_alloc_coherent,
-	rxe_dma_free_coherent
+	.mapping_error		= rxe_mapping_error,
+	.map_single		= rxe_dma_map_single,
+	.unmap_single		= rxe_dma_unmap_single,
+	.map_page		= rxe_dma_map_page,
+	.unmap_page		= rxe_dma_unmap_page,
+	.map_sg			= rxe_map_sg,
+	.unmap_sg		= rxe_unmap_sg,
+	.sync_single_for_cpu	= rxe_sync_single_for_cpu,
+	.sync_single_for_device	= rxe_sync_single_for_device,
+	.alloc_coherent		= rxe_dma_alloc_coherent,
+	.free_coherent		= rxe_dma_free_coherent
 };
