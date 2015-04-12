@@ -109,6 +109,8 @@ enum copy_direction {
 	direction_out,
 };
 
+#define DMA_BAD_ADDER ((u64) 0)
+
 int rxe_mem_init_dma(struct rxe_dev *rxe, struct rxe_pd *pd,
 		     int access, struct rxe_mem *mem);
 
