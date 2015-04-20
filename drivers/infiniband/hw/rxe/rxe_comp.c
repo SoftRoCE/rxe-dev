@@ -414,7 +414,8 @@ static void do_complete(struct rxe_qp *qp, struct rxe_send_wqe *wqe)
 	struct rxe_cqe cqe;
 
 	if ((qp->sq_sig_type == IB_SIGNAL_ALL_WR) ||
-	    (wqe->ibwr.send_flags & IB_SEND_SIGNALED)) {
+	    (wqe->ibwr.send_flags & IB_SEND_SIGNALED) ||
+	    (qp->req.state == QP_STATE_ERROR)) {
 		make_send_cqe(qp, wqe, &cqe);
 		rxe_cq_post(qp->scq, &cqe, 0);
 	}
