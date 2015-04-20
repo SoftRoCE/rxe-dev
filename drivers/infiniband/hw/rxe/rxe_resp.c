@@ -822,6 +822,7 @@ static enum resp_states do_complete(struct rxe_qp *qp,
 
 	wc->wr_id		= wqe->wr_id;
 	wc->status		= qp->resp.status;
+	wc->qp			= &qp->ibqp;
 
 	/* fields after status are not required for errors */
 	if (wc->status == IB_WC_SUCCESS) {

@@ -681,7 +681,7 @@ static int rxe_post_send(struct ib_qp *ibqp, struct ib_send_wr *wr,
 	int i;
 	int must_sched;
 
-	if (unlikely(!qp->valid || qp->req.state == QP_STATE_ERROR)) {
+	if (unlikely(!qp->valid)) {
 		*bad_wr = wr;
 		return -EINVAL;
 	}
