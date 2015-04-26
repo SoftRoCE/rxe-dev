@@ -1149,7 +1149,7 @@ static enum resp_states do_class_d1e_error(struct rxe_qp *qp)
 			qp->resp.mr = NULL;
 		}
 
-		return RESPST_CHK_OP_SEQ;
+		return RESPST_CLEANUP;
 	}
 }
 
