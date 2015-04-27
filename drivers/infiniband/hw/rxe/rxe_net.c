@@ -264,7 +264,8 @@ static int send(struct rxe_dev *rxe, struct sk_buff *skb)
 		struct in_addr *daddr = &av->dgid_addr._sockaddr_in.sin_addr;
 		struct rtable *rt = rxe_find_route4(saddr, daddr);
 
-		sent_bytes = udp_tunnel_xmit_skb(rt, nskb, saddr->s_addr,
+		sent_bytes = udp_tunnel_xmit_skb(rt, addr_info.sock4->sk,
+						 nskb, saddr->s_addr,
 						 daddr->s_addr,
 						 av->attr.grh.traffic_class,
 						 av->attr.grh.hop_limit,
@@ -279,7 +280,8 @@ static int send(struct rxe_dev *rxe, struct sk_buff *skb)
 		struct dst_entry *dst = rxe_find_route6(rxe->ndev,
 							saddr, daddr);
 
-		sent_bytes = udp_tunnel6_xmit_skb(dst, nskb, rxe->ndev,
+		sent_bytes = udp_tunnel6_xmit_skb(dst, addr_info.sock6->sk,
+						  nskb, rxe->ndev,
 						  saddr, daddr,
 						  av->attr.grh.traffic_class,
 						  av->attr.grh.hop_limit,
