@@ -2344,6 +2344,12 @@ static void mlx4_ib_remove(struct mlx4_dev *dev, void *ibdev_ptr)
 		ibdev->iboe.nb.notifier_call = NULL;
 	}
 
+	if (!mlx4_is_slave(dev) &&
+	    dev->caps.flags2 & MLX4_DEV_CAP_FLAG2_ROCE_V1_V2) {
+		if (mlx4_config_roce_v2_port(dev, 0))
+			pr_warn("failed to restore RoCEv2 dport\n");
+	}
+
 	if (ibdev->steering_support == MLX4_STEERING_MODE_DEVICE_MANAGED) {
 		mlx4_qp_release_range(dev, ibdev->steer_qpn_base,
 				      ibdev->steer_qpn_count);
