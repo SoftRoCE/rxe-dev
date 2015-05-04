@@ -754,8 +754,30 @@ static enum resp_states execute(struct rxe_qp *qp, struct rxe_pkt_info *pkt)
 		    qp_type(qp) == IB_QPT_SMI ||
 		    qp_type(qp) == IB_QPT_GSI) {
 			struct ib_grh grh;
+			struct sk_buff *skb = PKT_TO_SKB(pkt);
 
 			memset(&grh, 0, sizeof(struct ib_grh));
+			if (skb->protocol == htons(ETH_P_IP)) {
+				__u8 tos = ip_hdr(skb)->tos;
+				struct in6_addr *s_addr =
+					(struct in6_addr *)&grh.sgid;
+				struct in6_addr *d_addr =
+					(struct in6_addr *)&grh.dgid;
+
+				grh.version_tclass_flow =
+					cpu_to_be32((RXE_IPV4_VERSION << 28) |
+						    (tos << 24));
+				grh.paylen = ip_hdr(skb)->tot_len;
+				grh.hop_limit = ip_hdr(skb)->ttl;
+				grh.next_hdr = ip_hdr(skb)->protocol;
+				ipv6_addr_set_v4mapped(ip_hdr(skb)->saddr,
+						       s_addr);
+				ipv6_addr_set_v4mapped(ip_hdr(skb)->daddr,
+						       d_addr);
+			} else if (skb->protocol == htons(ETH_P_IPV6)) {
+				memcpy(&grh, ipv6_hdr(skb), sizeof(grh));
+			}
+
 			err = send_data_in(qp, &grh, sizeof(grh));
 			if (err)
 				return err;

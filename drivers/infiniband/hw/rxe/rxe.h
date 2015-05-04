@@ -56,6 +56,8 @@
 
 #define IB_PHYS_STATE_LINK_UP		(5)
 
+#define RXE_IPV4_VERSION		(4)
+
 int rxe_set_mtu(struct rxe_dev *rxe, unsigned int dev_mtu,
 		unsigned int port_num);
 
