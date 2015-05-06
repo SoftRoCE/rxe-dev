@@ -40,6 +40,7 @@
 #include <net/sch_generic.h>
 #include <linux/netfilter.h>
 #include <rdma/ib_addr.h>
+#include <net/ip6_tunnel.h>
 
 #include "rxe.h"
 #include "rxe_net.h"
@@ -253,12 +254,13 @@ static int send(struct rxe_dev *rxe, struct sk_buff *skb)
 	bool csum_nocheck = true;
 	struct rxe_pkt_info *pkt = SKB_TO_PKT(skb);
 	struct rxe_av *av;
+	int err;
+	struct iphdr *iph;
 
 	if (qp_type(pkt->qp) == IB_QPT_RC || qp_type(pkt->qp) == IB_QPT_UC)
 		av = &pkt->qp->pri_av;
 	else
 		av = &pkt->wqe->av;
-
 
 	nskb = skb_clone(skb, GFP_ATOMIC);
 	if (!nskb)
@@ -271,30 +273,45 @@ static int send(struct rxe_dev *rxe, struct sk_buff *skb)
 		struct in_addr *daddr = &av->dgid_addr._sockaddr_in.sin_addr;
 		struct rtable *rt = rxe_find_route4(saddr, daddr);
 
-		sent_bytes = udp_tunnel_xmit_skb(rt, addr_info.sock4->sk,
-						 nskb, saddr->s_addr,
-						 daddr->s_addr,
-						 av->attr.grh.traffic_class,
-						 av->attr.grh.hop_limit,
-						 df, htons(0xc000),
-						 htons(ROCE_V2_UDP_DPORT),
-						 xnet,
-						 csum_nocheck);
+		udp_tunnel_prepare_skb(rt, nskb, saddr->s_addr,
+				       daddr->s_addr,
+				       av->attr.grh.traffic_class,
+				       av->attr.grh.hop_limit,
+				       df, htons(0xc000),
+				       htons(ROCE_V2_UDP_DPORT),
+				       xnet,
+				       csum_nocheck);
+
+		sent_bytes = nskb->len;
+		iptunnel_prepare(rt, nskb, saddr->s_addr,
+				 daddr->s_addr, IPPROTO_UDP,
+				 av->attr.grh.traffic_class,
+				 av->attr.grh.hop_limit, df, xnet);
+
+		iph = ip_hdr(nskb);
+		iph->tot_len = htons(nskb->len);
+		ip_send_check(iph);
+
+		err = ip_local_out_sk(nskb->sk, nskb);
+		if (unlikely(net_xmit_eval(err)))
+			sent_bytes = 0;
 
 	} else if (av->network_type == RDMA_NETWORK_IPV6) {
 		struct in6_addr *saddr = &av->sgid_addr._sockaddr_in6.sin6_addr;
 		struct in6_addr *daddr = &av->dgid_addr._sockaddr_in6.sin6_addr;
 		struct dst_entry *dst = rxe_find_route6(rxe->ndev,
 							saddr, daddr);
+		udp_tunnel6_prepare_skb(dst, nskb, rxe->ndev,
+					saddr, daddr,
+					av->attr.grh.traffic_class,
+					av->attr.grh.hop_limit,
+					htons(0xc000),
+					htons(ROCE_V2_UDP_DPORT),
+					csum_nocheck);
 
-		sent_bytes = udp_tunnel6_xmit_skb(dst, addr_info.sock6->sk,
-						  nskb, rxe->ndev,
-						  saddr, daddr,
-						  av->attr.grh.traffic_class,
-						  av->attr.grh.hop_limit,
-						  htons(0xc000),
-						  htons(ROCE_V2_UDP_DPORT),
-						  csum_nocheck);
+		ip6_set_len(nskb);
+
+		sent_bytes = ip6tunnel_xmit(nskb->sk, nskb, rxe->ndev);
 	}
 
 	if (sent_bytes > 0) {
