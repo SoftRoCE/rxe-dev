@@ -120,11 +120,19 @@ int rxe_arbiter(void *arg)
 	   note skb could have already been removed */
 	skb = skb_dequeue(&qp->send_pkts);
 	if (skb) {
+		struct rxe_pkt_info *pkt = SKB_TO_PKT(skb);
+
 		err = xmit_one_packet(rxe, qp, skb);
 		if (err) {
 			skb_queue_head(&qp->send_pkts, skb);
 			rxe_run_task(&rxe->arbiter.task, 1);
 			return 1;
+		}
+
+		if ((qp_type(qp) != IB_QPT_RC) &&
+		    (pkt->mask & RXE_END_MASK)) {
+			pkt->wqe->state = wqe_state_done;
+			rxe_run_task(&qp->comp.task, 1);
 		}
 	}
 

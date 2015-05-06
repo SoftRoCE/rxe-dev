@@ -43,6 +43,7 @@
 
 #include "rxe.h"
 #include "rxe_net.h"
+#include "rxe_loc.h"
 
 /*
  * note: this table is a replacement for a protocol specific pointer
@@ -251,7 +252,13 @@ static int send(struct rxe_dev *rxe, struct sk_buff *skb)
 	struct sk_buff *nskb;
 	bool csum_nocheck = true;
 	struct rxe_pkt_info *pkt = SKB_TO_PKT(skb);
-	struct rxe_av *av = pkt->av;
+	struct rxe_av *av;
+
+	if (qp_type(pkt->qp) == IB_QPT_RC || qp_type(pkt->qp) == IB_QPT_UC)
+		av = &pkt->qp->pri_av;
+	else
+		av = &pkt->wqe->av;
+
 
 	nskb = skb_clone(skb, GFP_ATOMIC);
 	if (!nskb)
@@ -342,7 +349,6 @@ static struct sk_buff *init_packet(struct rxe_dev *rxe, struct rxe_av *av,
 	pkt->port_num	= 1;
 	pkt->hdr	= skb_put(skb, paylen);
 	pkt->mask	= RXE_GRH_MASK;
-	pkt->av		= av;
 
 	if (addr_same(rxe, av))
 		pkt->mask |= RXE_LOOPBACK_MASK;

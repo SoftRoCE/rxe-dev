@@ -243,10 +243,17 @@ static void rxe_rcv_mcast_pkt(struct rxe_dev *rxe, struct sk_buff *skb)
 	struct sk_buff *skb_copy;
 	struct rxe_mc_elem *mce;
 	struct rxe_qp *qp;
+	union ib_gid dgid;
 	int err;
 
+	if (skb->protocol == htons(ETH_P_IP))
+		ipv6_addr_set_v4mapped(ip_hdr(skb)->daddr,
+				       (struct in6_addr *)&dgid);
+	else if (skb->protocol == htons(ETH_P_IPV6))
+		memcpy(&dgid, &ipv6_hdr(skb)->daddr, sizeof(dgid));
+
 	/* lookup mcast group corresponding to mgid, takes a ref */
-	mcg = rxe_pool_get_key(&rxe->mc_grp_pool, &pkt->av->attr.grh.dgid);
+	mcg = rxe_pool_get_key(&rxe->mc_grp_pool, &dgid);
 	if (!mcg)
 		goto err1;	/* mcast group not registered */
 

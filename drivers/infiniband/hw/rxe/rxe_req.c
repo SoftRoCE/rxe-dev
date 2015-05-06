@@ -415,6 +415,7 @@ static struct rxe_pkt_info *init_req_packet(struct rxe_qp *qp,
 	pkt->mask	|= rxe_opcode[opcode].mask;
 	pkt->paylen	= paylen;
 	pkt->offset	= 0;
+	pkt->wqe	= wqe;
 
 	/* init bth */
 	solicited = (ibwr->send_flags & IB_SEND_SOLICITED) &&
@@ -545,8 +546,6 @@ static void update_state(struct rxe_qp *qp, struct rxe_send_wqe *wqe,
 	if (pkt->mask & RXE_END_MASK) {
 		if (qp_type(qp) == IB_QPT_RC)
 			wqe->state = wqe_state_pending;
-		else
-			wqe->state = wqe_state_done;
 
 		qp->req.wqe_index = next_index(qp->sq.queue,
 						qp->req.wqe_index);
@@ -660,10 +659,7 @@ int rxe_requester(void *arg)
 
 	arbiter_skb_queue(to_rdev(qp->ibqp.device), qp, PKT_TO_SKB(pkt));
 
-	if (mask & RXE_END_MASK)
-		goto complete;
-	else
-		goto done;
+	goto done;
 
 complete:
 	if (qp_type(qp) != IB_QPT_RC) {

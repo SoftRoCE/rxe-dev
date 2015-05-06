@@ -39,7 +39,7 @@
 struct rxe_pkt_info {
 	struct rxe_dev		*rxe;		/* device that owns packet */
 	struct rxe_qp		*qp;		/* qp that owns packet */
-	struct rxe_av		*av;		/* address vector */
+	struct rxe_send_wqe	*wqe;		/* send wqe */
 	u8			*hdr;		/* points to grh or bth */
 	u32			mask;		/* useful info about pkt */
 	u32			psn;		/* bth psn of packet */
