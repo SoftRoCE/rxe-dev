@@ -657,7 +657,6 @@ static enum resp_states read_reply(struct rxe_qp *qp,
 	int opcode;
 	int err;
 	struct resp_res *res = qp->resp.res;
-	unsigned char *buf;
 
 	if (!res) {
 		/* This is the first time we process that request. Get a
@@ -720,14 +719,6 @@ static enum resp_states read_reply(struct rxe_qp *qp,
 	res->read.va += payload;
 	res->read.resid -= payload;
 	res->cur_psn = (res->cur_psn + 1) & BTH_PSN_MASK;
-
-	buf = payload_addr(pkt) + payload;
-	while (payload & 0x3) {
-		*buf++ = 0;
-		payload++;
-	}
-
-	*buf = rxe_icrc_pkt(pkt);
 
 	arbiter_skb_queue(rxe, qp, skb);
 
@@ -913,8 +904,6 @@ static int send_ack(struct rxe_qp *qp, struct rxe_pkt_info *pkt,
 	int err = 0;
 	struct sk_buff *skb;
 	struct rxe_dev *rxe = to_rdev(qp->ibqp.device);
-	struct rxe_pkt_info *ack;
-	u32 *buf;
 
 	skb = prepare_ack_packet(qp, pkt, IB_OPCODE_RC_ACKNOWLEDGE,
 				 0, psn, syndrome);
@@ -922,12 +911,6 @@ static int send_ack(struct rxe_qp *qp, struct rxe_pkt_info *pkt,
 		err = -ENOMEM;
 		goto err1;
 	}
-
-	/* CRC */
-	ack = SKB_TO_PKT(skb);
-	buf = payload_addr(ack);
-
-	*buf = rxe_icrc_pkt(ack);
 
 	arbiter_skb_queue(rxe, qp, skb);
 
@@ -942,9 +925,7 @@ static int send_atomic_ack(struct rxe_qp *qp, struct rxe_pkt_info *pkt,
 	struct sk_buff *skb;
 	struct sk_buff *skb_copy;
 	struct rxe_dev *rxe = to_rdev(qp->ibqp.device);
-	struct rxe_pkt_info *ack;
 	struct resp_res *res;
-	u32 *buf;
 
 	skb = prepare_ack_packet(qp, pkt, IB_OPCODE_RC_ATOMIC_ACKNOWLEDGE,
 				 0, pkt->psn, syndrome);
@@ -952,11 +933,6 @@ static int send_atomic_ack(struct rxe_qp *qp, struct rxe_pkt_info *pkt,
 		rc = -ENOMEM;
 		goto out;
 	}
-
-	ack = SKB_TO_PKT(skb);
-	buf = payload_addr(ack);
-
-	*buf = rxe_icrc_pkt(ack);
 
 	res = &qp->resp.resources[qp->resp.res_head];
 	free_rd_atomic_resource(qp, res);

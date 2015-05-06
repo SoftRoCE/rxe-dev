@@ -251,10 +251,13 @@ static int send(struct rxe_dev *rxe, struct sk_buff *skb)
 {
 	int sent_bytes = 0;
 	struct sk_buff *nskb;
+	size_t payload;
+	struct rxe_pkt_info *npkt = SKB_TO_PKT(skb);
 	bool csum_nocheck = true;
 	struct rxe_pkt_info *pkt = SKB_TO_PKT(skb);
 	struct rxe_av *av;
 	int err;
+	u32 *crc;
 	struct iphdr *iph;
 
 	if (qp_type(pkt->qp) == IB_QPT_RC || qp_type(pkt->qp) == IB_QPT_UC)
@@ -292,6 +295,12 @@ static int send(struct rxe_dev *rxe, struct sk_buff *skb)
 		iph->tot_len = htons(nskb->len);
 		ip_send_check(iph);
 
+		/* CRC */
+		npkt = SKB_TO_PKT(nskb);
+		payload = payload_size(npkt);
+		crc = payload_addr(npkt) + payload;
+		*crc = rxe_icrc_pkt(npkt);
+
 		err = ip_local_out_sk(nskb->sk, nskb);
 		if (unlikely(net_xmit_eval(err)))
 			sent_bytes = 0;
@@ -310,6 +319,12 @@ static int send(struct rxe_dev *rxe, struct sk_buff *skb)
 					csum_nocheck);
 
 		ip6_set_len(nskb);
+
+		/* CRC */
+		npkt = SKB_TO_PKT(nskb);
+		payload = payload_size(npkt);
+		crc = payload_addr(npkt) + payload;
+		*crc = rxe_icrc_pkt(npkt);
 
 		sent_bytes = ip6tunnel_xmit(nskb->sk, nskb, rxe->ndev);
 	}

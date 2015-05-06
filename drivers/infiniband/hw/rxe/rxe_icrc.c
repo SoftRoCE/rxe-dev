@@ -37,49 +37,56 @@
 /* Compute a partial ICRC for all the IB transport headers. */
 u32 rxe_icrc_hdr(struct rxe_pkt_info *pkt)
 {
-	u32 crc = 0;
-#if 0
-	unsigned int length;
-	unsigned int grh_offset;
-	unsigned int bth_offset;
-	u8 tmp[RXE_LRH_BYTES + RXE_GRH_BYTES + RXE_BTH_BYTES];
+	unsigned int bth_offset = 0;
+	struct iphdr *ip4h = NULL;
+	struct ipv6hdr *ip6h = NULL;
+	struct udphdr *udph;
+	struct rxe_bth *bth;
+	struct sk_buff *skb = PKT_TO_SKB(pkt);
+	int crc;
+	int length;
+	int hdr_size = sizeof(struct udphdr) +
+		(skb->protocol == htons(ETH_P_IP) ?
+		sizeof(struct iphdr) : sizeof(struct ipv6hdr));
+	u8 tmp[hdr_size + RXE_BTH_BYTES];
 
 	/* This seed is the result of computing a CRC with a seed of
 	 * 0xfffffff and 8 bytes of 0xff representing a masked LRH. */
 	crc = 0xdebb20e3;
 
-	length = RXE_BTH_BYTES;
-	grh_offset = 0;
-	bth_offset = 0;
+	if (skb->protocol == htons(ETH_P_IP)) { /* IPv4 */
+		memcpy(tmp, ip_hdr(skb), hdr_size);
+		ip4h = (struct iphdr *)tmp;
+		udph = (struct udphdr *)(ip4h + 1);
 
-	if (pkt->mask & RXE_LRH_MASK) {
-		length += RXE_LRH_BYTES;
-		grh_offset += RXE_LRH_BYTES;
-		bth_offset += RXE_LRH_BYTES;
+		ip4h->ttl = 0xff;
+		ip4h->check = 0xffff;
+		ip4h->tos = 0xff;
+	} else {				/* IPv6 */
+		memcpy(tmp, ipv6_hdr(skb), hdr_size);
+		ip6h = (struct ipv6hdr *)tmp;
+		udph = (struct udphdr *)(ip6h + 1);
+
+		memset(ip6h->flow_lbl, 0xff, sizeof(ip6h->flow_lbl));
+		ip6h->priority = 0xf;
+		ip6h->hop_limit = 0xff;
 	}
-	if (pkt->mask & RXE_GRH_MASK) {
-		length += RXE_GRH_BYTES;
-		bth_offset += RXE_GRH_BYTES;
-	}
+	udph->check = 0xffff;
 
-	memcpy(tmp, pkt->hdr, length);
+	bth_offset += hdr_size;
 
-	if (pkt->mask & RXE_GRH_MASK) {
-		tmp[grh_offset + 0] |= 0x0f;	/* GRH: tclass */
-		tmp[grh_offset + 1] = 0xff;
-		tmp[grh_offset + 2] = 0xff;
-		tmp[grh_offset + 3] = 0xff;
-		tmp[grh_offset + 7] = 0xff;
-	}
+	memcpy(&tmp[bth_offset], pkt->hdr, RXE_BTH_BYTES);
+	bth = (struct rxe_bth *)&tmp[bth_offset];
 
-	tmp[bth_offset + 4] = 0xff;		/* BTH: resv8a */
+	/* exclude bth.resv8a */
+	bth->qpn |= cpu_to_be32(~BTH_QPN_MASK);
 
-	crc = crc32_le(crc, tmp + grh_offset, length - grh_offset);
+	length = hdr_size + RXE_BTH_BYTES;
+	crc = crc32_le(crc, tmp, length);
 
 	/* And finish to compute the CRC on the remainder of the headers. */
-	crc = crc32_le(crc, pkt->hdr + length,
+	crc = crc32_le(crc, pkt->hdr + RXE_BTH_BYTES,
 		       rxe_opcode[pkt->opcode].length - RXE_BTH_BYTES);
-#endif
 	return crc;
 }
 
