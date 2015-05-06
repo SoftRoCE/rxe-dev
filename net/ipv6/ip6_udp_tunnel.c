@@ -70,12 +70,11 @@ error:
 }
 EXPORT_SYMBOL_GPL(udp_sock_create6);
 
-int udp_tunnel6_xmit_skb(struct dst_entry *dst, struct sock *sk,
-			 struct sk_buff *skb,
-			 struct net_device *dev, struct in6_addr *saddr,
-			 struct in6_addr *daddr,
-			 __u8 prio, __u8 ttl, __be16 src_port,
-			 __be16 dst_port, bool nocheck)
+void udp_tunnel6_prepare_skb(struct dst_entry *dst, struct sk_buff *skb,
+			     struct net_device *dev, struct in6_addr *saddr,
+			     struct in6_addr *daddr,
+			     __u8 prio, __u8 ttl, __be16 src_port,
+			     __be16 dst_port, bool nocheck)
 {
 	struct udphdr *uh;
 	struct ipv6hdr *ip6h;
@@ -105,6 +104,18 @@ int udp_tunnel6_xmit_skb(struct dst_entry *dst, struct sock *sk,
 	ip6h->hop_limit   = ttl;
 	ip6h->daddr	  = *daddr;
 	ip6h->saddr	  = *saddr;
+}
+EXPORT_SYMBOL_GPL(udp_tunnel6_prepare_skb);
+
+int udp_tunnel6_xmit_skb(struct dst_entry *dst, struct sock *sk,
+			 struct sk_buff *skb,
+			 struct net_device *dev, struct in6_addr *saddr,
+			 struct in6_addr *daddr,
+			 __u8 prio, __u8 ttl, __be16 src_port,
+			 __be16 dst_port, bool nocheck)
+{
+	udp_tunnel6_prepare_skb(dst, skb, dev, saddr, daddr, prio, ttl,
+				src_port, dst_port, nocheck);
 
 	return ip6tunnel_xmit(sk, skb, dev);
 }

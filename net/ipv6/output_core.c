@@ -136,7 +136,7 @@ int ip6_dst_hoplimit(struct dst_entry *dst)
 EXPORT_SYMBOL(ip6_dst_hoplimit);
 #endif
 
-static int __ip6_local_out_sk(struct sock *sk, struct sk_buff *skb)
+void ip6_set_len(struct sk_buff *skb)
 {
 	int len;
 
@@ -144,6 +144,12 @@ static int __ip6_local_out_sk(struct sock *sk, struct sk_buff *skb)
 	if (len > IPV6_MAXPLEN)
 		len = 0;
 	ipv6_hdr(skb)->payload_len = htons(len);
+}
+EXPORT_SYMBOL(ip6_set_len);
+
+static int __ip6_local_out_sk(struct sock *sk, struct sk_buff *skb)
+{
+	ip6_set_len(skb);
 	IP6CB(skb)->nhoff = offsetof(struct ipv6hdr, nexthdr);
 
 	return nf_hook(NFPROTO_IPV6, NF_INET_LOCAL_OUT, sk, skb,

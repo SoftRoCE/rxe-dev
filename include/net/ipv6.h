@@ -944,4 +944,5 @@ int ipv6_sock_mc_join(struct sock *sk, int ifindex,
 		      const struct in6_addr *addr);
 int ipv6_sock_mc_drop(struct sock *sk, int ifindex,
 		      const struct in6_addr *addr);
+void ip6_set_len(struct sk_buff *skb);
 #endif /* _NET_IPV6_H */

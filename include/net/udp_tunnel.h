@@ -89,6 +89,12 @@ int udp_tunnel_xmit_skb(struct rtable *rt, struct sock *sk, struct sk_buff *skb,
 			bool xnet, bool nocheck);
 
 #if IS_ENABLED(CONFIG_IPV6)
+void udp_tunnel6_prepare_skb(struct dst_entry *dst, struct sk_buff *skb,
+			     struct net_device *dev, struct in6_addr *saddr,
+			     struct in6_addr *daddr,
+			     __u8 prio, __u8 ttl, __be16 src_port,
+			     __be16 dst_port, bool nocheck);
+
 int udp_tunnel6_xmit_skb(struct dst_entry *dst, struct sock *sk,
 			 struct sk_buff *skb,
 			 struct net_device *dev, struct in6_addr *saddr,
