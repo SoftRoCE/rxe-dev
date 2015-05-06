@@ -46,13 +46,11 @@
 #include <net/netns/generic.h>
 #include <net/rtnetlink.h>
 
-int iptunnel_xmit(struct sock *sk, struct rtable *rt, struct sk_buff *skb,
-		  __be32 src, __be32 dst, __u8 proto,
-		  __u8 tos, __u8 ttl, __be16 df, bool xnet)
+void iptunnel_prepare(struct rtable *rt, struct sk_buff *skb,
+		      __be32 src, __be32 dst, __u8 proto,
+		      __u8 tos, __u8 ttl, __be16 df, bool xnet)
 {
-	int pkt_len = skb->len;
 	struct iphdr *iph;
-	int err;
 
 	skb_scrub_packet(skb, xnet);
 
@@ -76,6 +74,17 @@ int iptunnel_xmit(struct sock *sk, struct rtable *rt, struct sk_buff *skb,
 	iph->ttl	=	ttl;
 	__ip_select_ident(dev_net(rt->dst.dev), iph,
 			  skb_shinfo(skb)->gso_segs ?: 1);
+}
+EXPORT_SYMBOL_GPL(iptunnel_prepare);
+
+int iptunnel_xmit(struct sock *sk, struct rtable *rt, struct sk_buff *skb,
+		  __be32 src, __be32 dst, __u8 proto,
+		  __u8 tos, __u8 ttl, __be16 df, bool xnet)
+{
+	int err;
+	int pkt_len = skb->len;
+
+	iptunnel_prepare(rt, skb, src, dst, proto, tos, ttl, df, xnet);
 
 	err = ip_local_out_sk(sk, skb);
 	if (unlikely(net_xmit_eval(err)))
