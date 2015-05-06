@@ -630,6 +630,7 @@ static struct sk_buff *prepare_ack_packet(struct rxe_qp *qp,
 	bth_set_pad(ack, pad);
 	bth_set_se(ack, 0);
 	bth_set_psn(ack, psn);
+	bth_set_ack(ack, 0);
 	ack->psn = psn;
 
 	if (ack->mask & RXE_AETH_MASK) {
