@@ -267,7 +267,7 @@ static int send(struct rxe_dev *rxe, struct sk_buff *skb)
 		return -ENOMEM;
 
 	if (av->network_type == RDMA_NETWORK_IPV4) {
-		__be16 df = 0;
+		__be16 df = htons(IP_DF);
 		bool xnet = false;
 		struct in_addr *saddr = &av->sgid_addr._sockaddr_in.sin_addr;
 		struct in_addr *daddr = &av->dgid_addr._sockaddr_in.sin_addr;
