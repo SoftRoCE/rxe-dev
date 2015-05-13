@@ -115,6 +115,7 @@ struct ib_gid_table {
 
 static const char * const gid_type_str[] = {
 	[IB_GID_TYPE_IB]	= "IB/ROCE V1\n",
+	[IB_GID_TYPE_ROCE_UDP_ENCAP]	= "RoCE v2\n",
 };
 
 const char *ib_cache_gid_type_str(enum ib_gid_type gid_type)
