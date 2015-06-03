@@ -214,6 +214,7 @@ struct rdma_id_private {
 	u8			tos;
 	u8			reuseaddr;
 	u8			afonly;
+	enum ib_gid_type	gid_type;
 };
 
 struct cma_multicast {
@@ -444,13 +445,14 @@ static inline int cma_validate_port(struct ib_device *device, u8 port,
 
 		ret = ib_find_cached_gid_by_port(device,
 						 gid,
+						 IB_GID_TYPE_IB,
 						 port,
 						 ndev,
 						 NULL);
 			if (ndev)
 				dev_put(ndev);
 	} else {
-		ret = ib_find_cached_gid_by_port(device, gid,
+		ret = ib_find_cached_gid_by_port(device, gid, IB_GID_TYPE_IB,
 						 port, NULL, NULL);
 	}
 
@@ -2278,6 +2280,7 @@ static int cma_resolve_iboe_route(struct rdma_id_private *id_priv)
 		ndev = dev_get_by_index(&init_net, addr->dev_addr.bound_dev_if);
 		route->path_rec->net = &init_net;
 		route->path_rec->ifindex = addr->dev_addr.bound_dev_if;
+		route->path_rec->gid_type = id_priv->gid_type;
 	}
 	if (!ndev) {
 		ret = -ENODEV;
