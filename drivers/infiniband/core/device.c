@@ -830,20 +830,25 @@ EXPORT_SYMBOL(ib_modify_port);
  * @index: The index into the GID table where the GID was found.  This
  *   parameter may be NULL.
  */
-int ib_find_gid(struct ib_device *device, union ib_gid *gid,
-		struct net_device *ndev, u8 *port_num, u16 *index)
+int ib_find_gid(struct ib_device *device, union ib_gid *gid, 
+		enum ib_gid_type gid_type, struct net_device *ndev,
+		u8 *port_num, u16 *index)
+
 {
 	union ib_gid tmp_gid;
 	int ret, port, i;
 
 	for (port = rdma_start_port(device); port <= rdma_end_port(device); ++port) {
 		if (rdma_cap_roce_gid_table(device, port)) {
-			if (!ib_find_cached_gid_by_port(device, gid, port,
+			if (!ib_find_cached_gid_by_port(device, gid, gid_type, port,
 						       ndev, index)) {
 				*port_num = port;
 				return 0;
 			}
 		}
+
+		if (gid_type != IB_GID_TYPE_IB)
+			continue;
 
 		for (i = 0; i < device->port_immutable[port].gid_tbl_len; ++i) {
 			ret = ib_query_gid(device, port, i, &tmp_gid, NULL);

@@ -64,6 +64,7 @@ enum gid_attr_find_mask {
 	GID_ATTR_FIND_MASK_GID          = 1UL << 0,
 	GID_ATTR_FIND_MASK_NETDEV	= 1UL << 1,
 	GID_ATTR_FIND_MASK_DEFAULT	= 1UL << 2,
+	GID_ATTR_FIND_MASK_GID_TYPE	= 1UL << 3,
 };
 
 enum gid_table_entry_props {
@@ -111,6 +112,19 @@ struct ib_gid_table {
 	struct mutex         lock;
 	struct ib_gid_table_entry *data_vec;
 };
+
+static const char * const gid_type_str[] = {
+	[IB_GID_TYPE_IB]	= "IB/RoCE v1",
+};
+
+const char *ib_cache_gid_type_str(enum ib_gid_type gid_type)
+{
+	if (gid_type < ARRAY_SIZE(gid_type_str) && gid_type_str[gid_type])
+		return gid_type_str[gid_type];
+
+	return "Invalid GID type";
+}
+EXPORT_SYMBOL(ib_cache_gid_type_str);
 
 static int write_gid(struct ib_device *ib_dev, u8 port,
 		     struct ib_gid_table *table, int ix,
@@ -216,6 +230,10 @@ static int find_gid(struct ib_gid_table *table, const union ib_gid *gid,
 		if (table->data_vec[i].props & GID_TABLE_ENTRY_INVALID)
 			goto next;
 
+		if (mask & GID_ATTR_FIND_MASK_GID_TYPE &&
+		    attr->gid_type != val->gid_type)
+			goto next;
+
 		if (mask & GID_ATTR_FIND_MASK_GID &&
 		    memcmp(gid, &table->data_vec[i].gid, sizeof(*gid)))
 			goto next;
@@ -277,6 +295,7 @@ int ib_cache_gid_add(struct ib_device *ib_dev, u8 port,
 	mutex_lock(&table->lock);
 
 	ix = find_gid(table, gid, attr, false, GID_ATTR_FIND_MASK_GID |
+		      GID_ATTR_FIND_MASK_GID_TYPE |
 		      GID_ATTR_FIND_MASK_NETDEV);
 	if (ix >= 0)
 		goto out_unlock;
@@ -308,6 +327,7 @@ int ib_cache_gid_del(struct ib_device *ib_dev, u8 port,
 
 	ix = find_gid(table, gid, attr, false,
 		      GID_ATTR_FIND_MASK_GID	  |
+		      GID_ATTR_FIND_MASK_GID_TYPE |
 		      GID_ATTR_FIND_MASK_NETDEV	  |
 		      GID_ATTR_FIND_MASK_DEFAULT);
 	if (ix < 0)
@@ -396,11 +416,13 @@ static int _ib_cache_gid_table_find(struct ib_device *ib_dev,
 
 static int ib_cache_gid_find(struct ib_device *ib_dev,
 			     const union ib_gid *gid,
+			     enum ib_gid_type gid_type,
 			     struct net_device *ndev, u8 *port,
 			     u16 *index)
 {
-	unsigned long mask = GID_ATTR_FIND_MASK_GID;
-	struct ib_gid_attr gid_attr_val = {.ndev = ndev};
+	unsigned long mask = GID_ATTR_FIND_MASK_GID |
+			     GID_ATTR_FIND_MASK_GID_TYPE;
+	struct ib_gid_attr gid_attr_val = {.ndev = ndev, .gid_type = gid_type};
 
 	if (ndev)
 		mask |= GID_ATTR_FIND_MASK_NETDEV;
@@ -411,14 +433,16 @@ static int ib_cache_gid_find(struct ib_device *ib_dev,
 
 int ib_find_cached_gid_by_port(struct ib_device *ib_dev,
 			       const union ib_gid *gid,
+			       enum ib_gid_type gid_type,
 			       u8 port, struct net_device *ndev,
 			       u16 *index)
 {
 	int local_index;
 	struct ib_gid_table **ports_table = ib_dev->cache.gid_cache;
 	struct ib_gid_table *table;
-	unsigned long mask = GID_ATTR_FIND_MASK_GID;
-	struct ib_gid_attr val = {.ndev = ndev};
+	unsigned long mask = GID_ATTR_FIND_MASK_GID |
+			     GID_ATTR_FIND_MASK_GID_TYPE;
+	struct ib_gid_attr val = {.ndev = ndev, .gid_type = gid_type};
 
 	if (port < rdma_start_port(ib_dev) ||
 	    port > rdma_end_port(ib_dev))
@@ -568,15 +592,15 @@ static void cleanup_gid_table_port(struct ib_device *ib_dev, u8 port,
 
 void ib_cache_gid_set_default_gid(struct ib_device *ib_dev, u8 port,
 				  struct net_device *ndev,
+				  unsigned long gid_type_mask,
 				  enum ib_cache_gid_default_mode mode)
 {
 	struct ib_gid_table **ports_table = ib_dev->cache.gid_cache;
 	union ib_gid gid;
 	struct ib_gid_attr gid_attr;
+	struct ib_gid_attr zattr_type = zattr;
 	struct ib_gid_table *table;
-	int ix;
-	union ib_gid current_gid;
-	struct ib_gid_attr current_gid_attr = {};
+	unsigned int gid_type;
 
 	table  = ports_table[port - rdma_start_port(ib_dev)];
 
@@ -584,46 +608,74 @@ void ib_cache_gid_set_default_gid(struct ib_device *ib_dev, u8 port,
 	memset(&gid_attr, 0, sizeof(gid_attr));
 	gid_attr.ndev = ndev;
 
-	ix = find_gid(table, NULL, NULL, true, GID_ATTR_FIND_MASK_DEFAULT);
+	for (gid_type = 0; gid_type < IB_GID_TYPE_SIZE; ++gid_type) {
+		int ix;
+		union ib_gid current_gid;
+		struct ib_gid_attr current_gid_attr = {};
 
-	/* Coudn't find default GID location */
-	WARN_ON(ix < 0);
+		if (1UL << gid_type & ~gid_type_mask)
+			continue;
 
-	mutex_lock(&table->lock);
-	if (!__ib_cache_gid_get(ib_dev, port, ix,
-				&current_gid, &current_gid_attr) &&
-	    mode == IB_CACHE_GID_DEFAULT_MODE_SET &&
-	    !memcmp(&gid, &current_gid, sizeof(gid)) &&
-	    !memcmp(&gid_attr, &current_gid_attr, sizeof(gid_attr)))
-		goto unlock;
+		gid_attr.gid_type = gid_type;
 
-	if ((memcmp(&current_gid, &zgid, sizeof(current_gid)) ||
-	     memcmp(&current_gid_attr, &zattr,
-		    sizeof(current_gid_attr))) &&
-	    del_gid(ib_dev, port, table, ix, true)) {
-		pr_warn("ib_cache_gid: can't delete index %d for default gid %pI6\n",
-			ix, gid.raw);
-		goto unlock;
+		ix = find_gid(table, &gid, &gid_attr, true,
+			      GID_ATTR_FIND_MASK_GID_TYPE |
+			      GID_ATTR_FIND_MASK_DEFAULT);
+
+		/* Coudn't find default GID location */
+		WARN_ON(ix < 0);
+
+		zattr_type.gid_type = gid_type;
+
+		mutex_lock(&table->lock);
+		if (!__ib_cache_gid_get(ib_dev, port, ix,
+					&current_gid, &current_gid_attr) &&
+		    mode == IB_CACHE_GID_DEFAULT_MODE_SET &&
+		    !memcmp(&gid, &current_gid, sizeof(gid)) &&
+		    !memcmp(&gid_attr, &current_gid_attr, sizeof(gid_attr)))
+			goto release;
+
+		if ((memcmp(&current_gid, &zgid, sizeof(current_gid)) ||
+		     memcmp(&current_gid_attr, &zattr_type,
+			    sizeof(current_gid_attr))) &&
+		    del_gid(ib_dev, port, table, ix, true)) {
+			pr_warn("roce_gid_table: can't delete index %d for default gid %pI6\n",
+				ix, gid.raw);
+			goto release;
+		}
+
+		if (mode == IB_CACHE_GID_DEFAULT_MODE_SET)
+			if (add_gid(ib_dev, port, table, ix, &gid, &gid_attr,
+				    true))
+				pr_warn("roce_gid_table: unable to add default gid %pI6\n",
+					gid.raw);
+
+release:
+		if (current_gid_attr.ndev)
+			dev_put(current_gid_attr.ndev);
+		mutex_unlock(&table->lock);
 	}
-
-	if (mode == IB_CACHE_GID_DEFAULT_MODE_SET)
-		if (add_gid(ib_dev, port, table, ix, &gid, &gid_attr, true))
-			pr_warn("ib_cache_gid: unable to add default gid %pI6\n",
-				gid.raw);
-
-unlock:
-	if (current_gid_attr.ndev)
-		dev_put(current_gid_attr.ndev);
-	mutex_unlock(&table->lock);
 }
 
 static int gid_table_reserve_default(struct ib_device *ib_dev, u8 port,
 				     struct ib_gid_table *table)
 {
-	if (rdma_protocol_roce(ib_dev, port)) {
-		struct ib_gid_table_entry *entry = &table->data_vec[0];
+	unsigned int i;
+	unsigned long roce_gid_type_mask;
+	unsigned int num_default_gids;
+	unsigned int current_gid = 0;
+
+	roce_gid_type_mask = roce_gid_type_mask_support(ib_dev, port);
+	num_default_gids = hweight_long(roce_gid_type_mask);
+	for (i = 0; i < num_default_gids && i < table->sz; i++) {
+		struct ib_gid_table_entry *entry =
+			&table->data_vec[i];
 
 		entry->props |= GID_TABLE_ENTRY_DEFAULT;
+		current_gid = find_next_bit(&roce_gid_type_mask,
+					    BITS_PER_LONG,
+					    current_gid);
+		entry->attr.gid_type = current_gid++;
 	}
 
 	return 0;
@@ -737,11 +789,12 @@ EXPORT_SYMBOL(ib_get_cached_gid);
 
 int ib_find_cached_gid(struct ib_device *device,
 		       const union ib_gid *gid,
+		       enum ib_gid_type gid_type,
 		       struct net_device *ndev,
 		       u8               *port_num,
 		       u16              *index)
 {
-	return ib_cache_gid_find(device, gid, ndev, port_num, index);
+	return ib_cache_gid_find(device, gid, gid_type, ndev, port_num, index);
 }
 EXPORT_SYMBOL(ib_find_cached_gid);
 
