@@ -276,6 +276,11 @@ static int send(struct rxe_dev *rxe, struct sk_buff *skb)
 		struct in_addr *daddr = &av->dgid_addr._sockaddr_in.sin_addr;
 		struct rtable *rt = rxe_find_route4(saddr, daddr);
 
+		if (!rt) {
+			kfree(nskb);
+			return -EHOSTUNREACH;
+		}
+
 		udp_tunnel_prepare_skb(rt, nskb, saddr->s_addr,
 				       daddr->s_addr,
 				       av->attr.grh.traffic_class,
@@ -310,6 +315,12 @@ static int send(struct rxe_dev *rxe, struct sk_buff *skb)
 		struct in6_addr *daddr = &av->dgid_addr._sockaddr_in6.sin6_addr;
 		struct dst_entry *dst = rxe_find_route6(rxe->ndev,
 							saddr, daddr);
+
+		if (!dst) {
+			kfree(nskb);
+			return -EHOSTUNREACH;
+		}
+
 		udp_tunnel6_prepare_skb(dst, nskb, rxe->ndev,
 					saddr, daddr,
 					av->attr.grh.traffic_class,
