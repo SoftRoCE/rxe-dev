@@ -427,7 +427,7 @@ void rxe_remove(struct rxe_dev *rxe)
 {
 	rxe_unregister_device(rxe);
 
-	kref_put(&rxe->ref_cnt, rxe_release);
+	rxe_release(&rxe->ref_cnt);
 }
 EXPORT_SYMBOL(rxe_remove);
 
