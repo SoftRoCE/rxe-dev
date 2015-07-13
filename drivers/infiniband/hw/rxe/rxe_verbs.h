@@ -68,8 +68,9 @@ struct rxe_pd {
 };
 
 struct rxe_av {
-	struct ib_ah_attr	attr;
+	u8			port_num;
 	u8			network_type;
+	struct ib_global_route	grh;
 	union {
 		struct sockaddr		_sockaddr;
 		struct sockaddr_in	_sockaddr_in;

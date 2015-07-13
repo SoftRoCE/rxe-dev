@@ -365,7 +365,7 @@ static inline int get_mtu(struct rxe_qp *qp, struct rxe_send_wqe *wqe)
 		return qp->mtu;
 
 	av = &wqe->av;
-	port = &rxe->port[av->attr.port_num - 1];
+	port = &rxe->port[av->port_num - 1];
 
 	return port->mtu_cap;
 }

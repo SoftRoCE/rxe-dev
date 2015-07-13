@@ -62,15 +62,16 @@ int rxe_av_from_attr(struct rxe_dev *rxe, u8 port_num,
 		     struct rxe_av *av, struct ib_ah_attr *attr)
 {
 	memset(av, 0, sizeof(*av));
-	av->attr = *attr;
-	av->attr.port_num = port_num;
+	memcpy(&av->grh, &attr->grh, sizeof(attr->grh));
+	av->port_num = port_num;
 	return 0;
 }
 
 int rxe_av_to_attr(struct rxe_dev *rxe, struct rxe_av *av,
 		   struct ib_ah_attr *attr)
 {
-	*attr = av->attr;
+	memcpy(&attr->grh, &av->grh, sizeof(av->grh));
+	attr->port_num = av->port_num;
 	return 0;
 }
 

@@ -280,8 +280,8 @@ int prepare(struct rxe_dev *rxe, struct rxe_pkt_info *pkt,
 
 		udp_tunnel_prepare_skb(rt, skb, saddr->s_addr,
 				       daddr->s_addr,
-				       av->attr.grh.traffic_class,
-				       av->attr.grh.hop_limit,
+				       av->grh.traffic_class,
+				       av->grh.hop_limit,
 				       df, htons(0xc000),
 				       htons(ROCE_V2_UDP_DPORT),
 				       xnet,
@@ -290,8 +290,8 @@ int prepare(struct rxe_dev *rxe, struct rxe_pkt_info *pkt,
 		sent_bytes = skb->len;
 		iptunnel_prepare(rt, skb, saddr->s_addr,
 				 daddr->s_addr, IPPROTO_UDP,
-				 av->attr.grh.traffic_class,
-				 av->attr.grh.hop_limit, df, xnet);
+				 av->grh.traffic_class,
+				 av->grh.hop_limit, df, xnet);
 
 		iph = ip_hdr(skb);
 		iph->tot_len = htons(skb->len);
@@ -310,8 +310,8 @@ int prepare(struct rxe_dev *rxe, struct rxe_pkt_info *pkt,
 
 		udp_tunnel6_prepare_skb(dst, skb, rxe->ndev,
 					saddr, daddr,
-					av->attr.grh.traffic_class,
-					av->attr.grh.hop_limit,
+					av->grh.traffic_class,
+					av->grh.hop_limit,
 					htons(0xc000),
 					htons(ROCE_V2_UDP_DPORT),
 					csum_nocheck);
@@ -380,7 +380,7 @@ static inline int addr_same(struct rxe_dev *rxe, struct rxe_av *av)
 	int port_num = 1;
 
 	return rxe->port[port_num - 1].guid_tbl[0]
-			== av->attr.grh.dgid.global.interface_id;
+			== av->grh.dgid.global.interface_id;
 }
 
 static struct sk_buff *init_packet(struct rxe_dev *rxe, struct rxe_av *av,
