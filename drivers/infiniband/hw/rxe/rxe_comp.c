@@ -270,8 +270,8 @@ static inline enum comp_state check_ack(struct rxe_qp *qp,
 		/* Fall through (IB_OPCODE_RC_RDMA_READ_RESPONSE_MIDDLE
 		 * doesn't have an AETH) */
 	case IB_OPCODE_RC_RDMA_READ_RESPONSE_MIDDLE:
-		if (wqe->ibwr.opcode != IB_WR_RDMA_READ &&
-		    wqe->ibwr.opcode != IB_WR_RDMA_READ_WITH_INV) {
+		if (wqe->wr.opcode != IB_WR_RDMA_READ &&
+		    wqe->wr.opcode != IB_WR_RDMA_READ_WITH_INV) {
 			/* TODO check spec. retry/discard ? */
 			return COMPST_ERROR;
 		}
@@ -284,8 +284,8 @@ static inline enum comp_state check_ack(struct rxe_qp *qp,
 		if ((syn & AETH_TYPE_MASK) != AETH_ACK)
 			return COMPST_ERROR;
 
-		if (wqe->ibwr.opcode != IB_WR_ATOMIC_CMP_AND_SWP &&
-		    wqe->ibwr.opcode != IB_WR_ATOMIC_FETCH_AND_ADD)
+		if (wqe->wr.opcode != IB_WR_ATOMIC_CMP_AND_SWP &&
+		    wqe->wr.opcode != IB_WR_ATOMIC_FETCH_AND_ADD)
 			/* TODO check spec. retry/discard ? */
 			return COMPST_ERROR;
 		reset_retry_counters(qp);
@@ -392,17 +392,17 @@ static void make_send_cqe(struct rxe_qp *qp, struct rxe_send_wqe *wqe,
 	if (!qp->is_user) {
 		struct ib_wc		*wc	= &cqe->ibwc;
 
-		wc->wr_id		= wqe->ibwr.wr_id;
+		wc->wr_id		= wqe->wr.wr_id;
 		wc->status		= wqe->status;
-		wc->opcode		= wr_to_wc_opcode(wqe->ibwr.opcode);
+		wc->opcode		= wr_to_wc_opcode(wqe->wr.opcode);
 		wc->byte_len		= wqe->dma.length;
 		wc->qp			= &qp->ibqp;
 	} else {
 		struct ib_uverbs_wc	*uwc	= &cqe->uibwc;
 
-		uwc->wr_id		= wqe->ibwr.wr_id;
+		uwc->wr_id		= wqe->wr.wr_id;
 		uwc->status		= wqe->status;
-		uwc->opcode		= wr_to_wc_opcode(wqe->ibwr.opcode);
+		uwc->opcode		= wr_to_wc_opcode(wqe->wr.opcode);
 		uwc->byte_len		= wqe->dma.length;
 		uwc->qp_num		= qp->ibqp.qp_num;
 	}
@@ -413,7 +413,7 @@ static void do_complete(struct rxe_qp *qp, struct rxe_send_wqe *wqe)
 	struct rxe_cqe cqe;
 
 	if ((qp->sq_sig_type == IB_SIGNAL_ALL_WR) ||
-	    (wqe->ibwr.send_flags & IB_SEND_SIGNALED) ||
+	    (wqe->wr.send_flags & IB_SEND_SIGNALED) ||
 	    (qp->req.state == QP_STATE_ERROR)) {
 		make_send_cqe(qp, wqe, &cqe);
 		rxe_cq_post(qp->scq, &cqe, 0);

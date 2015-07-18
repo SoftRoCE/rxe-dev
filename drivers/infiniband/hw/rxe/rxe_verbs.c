@@ -585,6 +585,56 @@ err1:
 	return -EINVAL;
 }
 
+static void init_send_wr(struct rxe_qp *qp, struct rxe_send_wr *wr,
+			 struct ib_send_wr *ibwr)
+{
+	wr->wr_id = ibwr->wr_id;
+	wr->num_sge = ibwr->num_sge;
+	wr->opcode = ibwr->opcode;
+	wr->send_flags = ibwr->send_flags;
+
+	if (qp_type(qp) == IB_QPT_UD ||
+	    qp_type(qp) == IB_QPT_SMI ||
+	    qp_type(qp) == IB_QPT_GSI) {
+		wr->wr.ud.remote_qpn = ibwr->wr.ud.remote_qpn;
+		wr->wr.ud.pkey_index = ibwr->wr.ud.pkey_index;
+		wr->wr.ud.remote_qkey = ibwr->wr.ud.remote_qkey;
+		if (wr->opcode == IB_WR_SEND_WITH_IMM)
+			wr->ex.imm_data = ibwr->ex.imm_data;
+	} else {
+		switch (wr->opcode) {
+		case IB_WR_RDMA_WRITE_WITH_IMM:
+			wr->ex.imm_data = ibwr->ex.imm_data;
+		case IB_WR_RDMA_READ:
+		case IB_WR_RDMA_WRITE:
+			wr->wr.rdma.remote_addr =
+				ibwr->wr.rdma.remote_addr;
+			wr->wr.rdma.rkey	=
+				ibwr->wr.rdma.rkey;
+			break;
+		case IB_WR_SEND_WITH_IMM:
+			wr->ex.imm_data =
+				ibwr->ex.imm_data;
+			break;
+		case IB_WR_SEND_WITH_INV:
+			wr->ex.invalidate_rkey =
+				ibwr->ex.invalidate_rkey;
+			break;
+		case IB_WR_ATOMIC_CMP_AND_SWP:
+		case IB_WR_ATOMIC_FETCH_AND_ADD:
+			wr->wr.atomic.remote_addr =
+				ibwr->wr.atomic.remote_addr;
+			wr->wr.atomic.compare_add =
+				ibwr->wr.atomic.compare_add;
+			wr->wr.atomic.swap = ibwr->wr.atomic.swap;
+			wr->wr.atomic.rkey = ibwr->wr.atomic.rkey;
+			break;
+		default:
+			break;
+		}
+	}
+}
+
 static int init_send_wqe(struct rxe_qp *qp, struct ib_send_wr *ibwr,
 			 unsigned int mask, unsigned int length,
 			 struct rxe_send_wqe *wqe)
@@ -594,7 +644,7 @@ static int init_send_wqe(struct rxe_qp *qp, struct ib_send_wr *ibwr,
 	int i;
 	u8 *p;
 
-	memcpy(&wqe->ibwr, ibwr, sizeof(wqe->ibwr));
+	init_send_wr(qp, &wqe->wr, ibwr);
 
 	if (qp_type(qp) == IB_QPT_UD ||
 	    qp_type(qp) == IB_QPT_SMI ||

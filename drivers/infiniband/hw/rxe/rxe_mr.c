@@ -554,7 +554,7 @@ int copy_data(
 	u32			*crcp)
 {
 	int			bytes;
-	struct ib_sge		*sge	= &dma->sge[dma->cur_sge];
+	struct rxe_sge		*sge	= &dma->sge[dma->cur_sge];
 	int			offset	= dma->sge_offset;
 	int			resid	= dma->resid;
 	struct rxe_mem		*mem	= NULL;
@@ -640,7 +640,7 @@ err1:
 
 int advance_dma_data(struct rxe_dma_info *dma, unsigned int length)
 {
-	struct ib_sge		*sge	= &dma->sge[dma->cur_sge];
+	struct rxe_sge		*sge	= &dma->sge[dma->cur_sge];
 	int			offset	= dma->sge_offset;
 	int			resid	= dma->resid;
 

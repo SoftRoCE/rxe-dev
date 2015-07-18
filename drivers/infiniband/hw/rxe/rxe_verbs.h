@@ -35,6 +35,7 @@
 #define RXE_VERBS_H
 
 #include <linux/interrupt.h>
+#include <rdma/ib_rxe.h>
 #include "rxe_pool.h"
 #include "rxe_task.h"
 
@@ -67,17 +68,6 @@ struct rxe_pd {
 	struct ib_pd		ibpd;
 };
 
-struct rxe_av {
-	u8			port_num;
-	u8			network_type;
-	struct ib_global_route	grh;
-	union {
-		struct sockaddr		_sockaddr;
-		struct sockaddr_in	_sockaddr_in;
-		struct sockaddr_in6	_sockaddr_in6;
-	} sgid_addr, dgid_addr;
-};
-
 struct rxe_ah {
 	struct rxe_pool_entry	pelem;
 	struct ib_ah		ibah;
@@ -103,47 +93,12 @@ struct rxe_cq {
 	struct tasklet_struct	comp_task;
 };
 
-struct rxe_dma_info {
-	__u32			length;
-	__u32			resid;
-	__u32			cur_sge;
-	__u32			num_sge;
-	__u32			sge_offset;
-	union {
-		u8		inline_data[0];
-		struct ib_sge	sge[0];
-	};
-};
-
 enum wqe_state {
 	wqe_state_posted,
 	wqe_state_processing,
 	wqe_state_pending,
 	wqe_state_done,
 	wqe_state_error,
-};
-
-/* must match corresponding data structure in librxe */
-struct rxe_send_wqe {
-	struct ib_send_wr	ibwr;
-	struct rxe_av		av;	/* UD only */
-	u32			status;
-	u32			state;
-	u64			iova;
-	u32			mask;
-	u32			first_psn;
-	u32			last_psn;
-	u32			ack_length;
-	u32			ssn;
-	u32			has_rd_atomic;
-	struct rxe_dma_info	dma;	/* must go last */
-};
-
-struct rxe_recv_wqe {
-	__u64			wr_id;
-	__u32			num_sge;
-	__u32			padding;
-	struct rxe_dma_info	dma;
 };
 
 struct rxe_sq {

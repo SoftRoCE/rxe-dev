@@ -51,9 +51,9 @@ static inline void retry_first_write_send(struct rxe_qp *qp,
 				qp->mtu : wqe->dma.resid;
 
 		qp->req.opcode = next_opcode(qp, wqe,
-					     wqe->ibwr.opcode);
+					     wqe->wr.opcode);
 
-		if (wqe->ibwr.send_flags & IB_SEND_INLINE) {
+		if (wqe->wr.send_flags & IB_SEND_INLINE) {
 			wqe->dma.resid -= to_send;
 			wqe->dma.sge_offset += to_send;
 		} else {
@@ -83,7 +83,7 @@ static void req_retry(struct rxe_qp *qp)
 		wqe_index != producer_index(qp->sq.queue);
 		wqe_index = next_index(qp->sq.queue, wqe_index)) {
 		wqe = addr_from_index(qp->sq.queue, wqe_index);
-		mask = wr_opcode_mask(wqe->ibwr.opcode, qp);
+		mask = wr_opcode_mask(wqe->wr.opcode, qp);
 
 		if (wqe->state == wqe_state_posted)
 			break;
@@ -92,8 +92,8 @@ static void req_retry(struct rxe_qp *qp)
 			continue;
 
 		wqe->iova = (mask & WR_ATOMIC_MASK) ?
-			wqe->ibwr.wr.atomic.remote_addr :
-			wqe->ibwr.wr.rdma.remote_addr;
+			wqe->wr.wr.atomic.remote_addr :
+			wqe->wr.wr.rdma.remote_addr;
 
 		if (!first || (mask & WR_READ_MASK) == 0) {
 			wqe->dma.resid = wqe->dma.length;
@@ -174,13 +174,13 @@ static struct rxe_send_wqe *req_next_wqe(struct rxe_qp *qp)
 		     (wqe->state != wqe_state_processing)))
 		return NULL;
 
-	if (unlikely((wqe->ibwr.send_flags & IB_SEND_FENCE) &&
+	if (unlikely((wqe->wr.send_flags & IB_SEND_FENCE) &&
 		     (qp->req.wqe_index != consumer_index(qp->sq.queue)))) {
 		qp->req.wait_fence = 1;
 		return NULL;
 	}
 
-	wqe->mask = wr_opcode_mask(wqe->ibwr.opcode, qp);
+	wqe->mask = wr_opcode_mask(wqe->wr.opcode, qp);
 	return wqe;
 }
 
@@ -378,7 +378,7 @@ static struct sk_buff *init_req_packet(struct rxe_qp *qp,
 	struct rxe_dev		*rxe = to_rdev(qp->ibqp.device);
 	struct rxe_port		*port = &rxe->port[qp->attr.port_num - 1];
 	struct sk_buff		*skb;
-	struct ib_send_wr	*ibwr = &wqe->ibwr;
+	struct rxe_send_wr	*ibwr = &wqe->wr;
 	struct rxe_av		*av;
 	int			pad = (-payload) & 0x3;
 	int			paylen;
@@ -485,7 +485,7 @@ static int fill_packet(struct rxe_qp *qp, struct rxe_send_wqe *wqe,
 	crc = rxe_icrc_hdr(pkt, skb);
 
 	if (pkt->mask & RXE_WRITE_OR_SEND) {
-		if (wqe->ibwr.send_flags & IB_SEND_INLINE) {
+		if (wqe->wr.send_flags & IB_SEND_INLINE) {
 			u8 *tmp = &wqe->dma.inline_data[wqe->dma.sge_offset];
 
 			crc = crc32_le(crc, tmp, payload);
@@ -600,7 +600,7 @@ next_wqe:
 		goto exit;
 	}
 
-	opcode = next_opcode(qp, wqe, wqe->ibwr.opcode);
+	opcode = next_opcode(qp, wqe, wqe->wr.opcode);
 	if (unlikely(opcode < 0)) {
 		wqe->status = IB_WC_LOC_QP_OP_ERR;
 		/* TODO most be more to do here ?? */
