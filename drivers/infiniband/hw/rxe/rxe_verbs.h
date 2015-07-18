@@ -67,11 +67,8 @@ struct rxe_pd {
 	struct ib_pd		ibpd;
 };
 
-#define RXE_LL_ADDR_LEN		(16)
-
 struct rxe_av {
 	struct ib_ah_attr	attr;
-	u8			ll_addr[RXE_LL_ADDR_LEN];
 	u8			network_type;
 	union {
 		struct sockaddr		_sockaddr;
