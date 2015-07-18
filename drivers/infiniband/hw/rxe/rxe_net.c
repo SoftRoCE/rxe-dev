@@ -420,12 +420,6 @@ static struct sk_buff *init_packet(struct rxe_dev *rxe, struct rxe_av *av,
 	return skb;
 }
 
-static int init_av(struct rxe_dev *rxe, struct ib_ah_attr *attr,
-		   struct rxe_av *av)
-{
-	return 0;
-}
-
 /*
  * this is required by rxe_cfg to match rxe devices in
  * /sys/class/infiniband up with their underlying ethernet devices
@@ -452,7 +446,6 @@ static struct rxe_ifc_ops ifc_ops = {
 	.send		= send,
 	.loopback	= loopback,
 	.init_packet	= init_packet,
-	.init_av	= init_av,
 	.parent_name	= parent_name,
 	.link_layer	= link_layer,
 };

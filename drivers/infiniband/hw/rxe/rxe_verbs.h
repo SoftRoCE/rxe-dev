@@ -446,8 +446,6 @@ struct rxe_ifc_ops {
 	int (*loopback)(struct sk_buff *skb);
 	struct sk_buff *(*init_packet)(struct rxe_dev *rxe, struct rxe_av *av,
 				       int paylen, struct rxe_pkt_info *pkt);
-	int (*init_av)(struct rxe_dev *rxe, struct ib_ah_attr *attr,
-		       struct rxe_av *av);
 	char *(*parent_name)(struct rxe_dev *rxe, unsigned int port_num);
 	enum rdma_link_layer (*link_layer)(struct rxe_dev *rxe,
 					   unsigned int port_num);

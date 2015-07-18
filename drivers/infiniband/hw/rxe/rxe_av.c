@@ -64,7 +64,7 @@ int rxe_av_from_attr(struct rxe_dev *rxe, u8 port_num,
 	memset(av, 0, sizeof(*av));
 	av->attr = *attr;
 	av->attr.port_num = port_num;
-	return rxe->ifc_ops->init_av(rxe, attr, av);
+	return 0;
 }
 
 int rxe_av_to_attr(struct rxe_dev *rxe, struct rxe_av *av,
