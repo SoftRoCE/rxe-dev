@@ -35,14 +35,13 @@
 #include "rxe_loc.h"
 
 /* Compute a partial ICRC for all the IB transport headers. */
-u32 rxe_icrc_hdr(struct rxe_pkt_info *pkt)
+u32 rxe_icrc_hdr(struct rxe_pkt_info *pkt, struct sk_buff *skb)
 {
 	unsigned int bth_offset = 0;
 	struct iphdr *ip4h = NULL;
 	struct ipv6hdr *ip6h = NULL;
 	struct udphdr *udph;
 	struct rxe_bth *bth;
-	struct sk_buff *skb = PKT_TO_SKB(pkt);
 	int crc;
 	int length;
 	int hdr_size = sizeof(struct udphdr) +
@@ -87,21 +86,5 @@ u32 rxe_icrc_hdr(struct rxe_pkt_info *pkt)
 	/* And finish to compute the CRC on the remainder of the headers. */
 	crc = crc32_le(crc, pkt->hdr + RXE_BTH_BYTES,
 		       rxe_opcode[pkt->opcode].length - RXE_BTH_BYTES);
-	return crc;
-}
-
-/* Compute the ICRC for a packet (incoming or outgoing). */
-u32 rxe_icrc_pkt(struct rxe_pkt_info *pkt)
-{
-	u32 crc;
-	int size;
-
-	crc = rxe_icrc_hdr(pkt);
-
-	/* And finish to compute the CRC on the remainder. */
-	size = pkt->paylen - rxe_opcode[pkt->opcode].length - RXE_ICRC_SIZE;
-	crc = crc32_le(crc, payload_addr(pkt), size);
-	crc = ~crc;
-
 	return crc;
 }

@@ -169,13 +169,13 @@ static struct rxe_send_wqe *req_next_wqe(struct rxe_qp *qp)
 
 	wqe = addr_from_index(qp->sq.queue, qp->req.wqe_index);
 
-	if (qp->req.state == QP_STATE_DRAIN ||
-	    qp->req.state == QP_STATE_DRAINED)
-		if (wqe->state != wqe_state_processing)
-			return NULL;
+	if (unlikely((qp->req.state == QP_STATE_DRAIN ||
+		      qp->req.state == QP_STATE_DRAINED) &&
+		     (wqe->state != wqe_state_processing)))
+		return NULL;
 
-	if ((wqe->ibwr.send_flags & IB_SEND_FENCE) &&
-	    (qp->req.wqe_index != consumer_index(qp->sq.queue))) {
+	if (unlikely((wqe->ibwr.send_flags & IB_SEND_FENCE) &&
+		     (qp->req.wqe_index != consumer_index(qp->sq.queue)))) {
 		qp->req.wait_fence = 1;
 		return NULL;
 	}
@@ -357,28 +357,26 @@ static inline int check_init_depth(struct rxe_qp *qp, struct rxe_send_wqe *wqe)
 
 static inline int get_mtu(struct rxe_qp *qp, struct rxe_send_wqe *wqe)
 {
-	int mtu;
 	struct rxe_dev *rxe = to_rdev(qp->ibqp.device);
+	struct rxe_port *port;
+	struct rxe_av *av;
 
-	if ((qp_type(qp) == IB_QPT_RC) || (qp_type(qp) == IB_QPT_UC)) {
-		mtu = qp->mtu;
-	} else {
-		struct rxe_av *av = &wqe->av;
-		struct rxe_port *port = &rxe->port[av->attr.port_num - 1];
+	if ((qp_type(qp) == IB_QPT_RC) || (qp_type(qp) == IB_QPT_UC))
+		return qp->mtu;
 
-		mtu = port->mtu_cap;
-	}
+	av = &wqe->av;
+	port = &rxe->port[av->attr.port_num - 1];
 
-	return mtu;
+	return port->mtu_cap;
 }
 
-static struct rxe_pkt_info *init_req_packet(struct rxe_qp *qp,
-					    struct rxe_send_wqe *wqe,
-					    int opcode, int payload)
+static struct sk_buff *init_req_packet(struct rxe_qp *qp,
+				       struct rxe_send_wqe *wqe,
+				       int opcode, int payload,
+				       struct rxe_pkt_info *pkt)
 {
 	struct rxe_dev		*rxe = to_rdev(qp->ibqp.device);
 	struct rxe_port		*port = &rxe->port[qp->attr.port_num - 1];
-	struct rxe_pkt_info	*pkt;
 	struct sk_buff		*skb;
 	struct ib_send_wr	*ibwr = &wqe->ibwr;
 	struct rxe_av		*av;
@@ -399,16 +397,12 @@ static struct rxe_pkt_info *init_req_packet(struct rxe_qp *qp,
 		av = &wqe->av;
 
 	/* init skb */
-	skb = rxe->ifc_ops->init_packet(rxe, av, paylen);
-	if (!skb)
+	skb = rxe->ifc_ops->init_packet(rxe, av, paylen, pkt);
+	if (unlikely(!skb))
 		return NULL;
-
-	atomic_inc(&qp->req_skb_out);
-	atomic_inc(&rxe->req_skb_out);
 
 	/* pkt->hdr, rxe, port_num, paylen and
 	   mask are initialized in ifc layer */
-	pkt		= SKB_TO_PKT(skb);
 	pkt->opcode	= opcode;
 	pkt->qp		= qp;
 	pkt->psn	= qp->req.psn;
@@ -472,49 +466,44 @@ static struct rxe_pkt_info *init_req_packet(struct rxe_qp *qp,
 		deth_set_sqp(pkt, qp->ibqp.qp_num);
 	}
 
-	return pkt;
+	return skb;
 }
 
 static int fill_packet(struct rxe_qp *qp, struct rxe_send_wqe *wqe,
-		       struct rxe_pkt_info *pkt, int payload)
+		       struct rxe_pkt_info *pkt, struct sk_buff *skb,
+		       int payload)
 {
 	struct rxe_dev *rxe = to_rdev(qp->ibqp.device);
-	static const uint8_t zerobuf[4] = {0,};
-	int pad;
 	u32 crc = 0;
-	u8 *p;
+	u32 *p;
+	int err;
 
-	crc = rxe_icrc_hdr(pkt);
+	err = rxe->ifc_ops->prepare(rxe, pkt, skb);
+	if (err)
+		return err;
+
+	crc = rxe_icrc_hdr(pkt, skb);
 
 	if (pkt->mask & RXE_WRITE_OR_SEND) {
 		if (wqe->ibwr.send_flags & IB_SEND_INLINE) {
-			p = &wqe->dma.inline_data[wqe->dma.sge_offset];
+			u8 *tmp = &wqe->dma.inline_data[wqe->dma.sge_offset];
 
-			crc = crc32_le(crc, p, payload);
+			crc = crc32_le(crc, tmp, payload);
 
-			memcpy(payload_addr(pkt), p, payload);
+			memcpy(payload_addr(pkt), tmp, payload);
 
 			wqe->dma.resid -= payload;
 			wqe->dma.sge_offset += payload;
 		} else {
-			if (copy_data(rxe, qp->pd, 0, &wqe->dma,
-				      payload_addr(pkt), payload,
-				      direction_out,
-				      &crc)) {
-				return -1;
-			}
+			err = copy_data(rxe, qp->pd, 0, &wqe->dma,
+					payload_addr(pkt), payload,
+					direction_out,
+					&crc);
+			if (err)
+				return err;
 		}
 	}
-
 	p = payload_addr(pkt) + payload;
-	pad = (-payload) & 0x3;
-	if (pad) {
-		crc = crc32_le(crc, zerobuf, pad);
-
-		memcpy(p, zerobuf, pad);
-
-		p += pad;
-	}
 
 	*p = ~crc;
 
@@ -553,6 +542,8 @@ static void update_state(struct rxe_qp *qp, struct rxe_send_wqe *wqe,
 		wqe->state = wqe_state_processing;
 	}
 
+	qp->need_req_skb = 0;
+
 	if (qp->qp_timeout_jiffies && !timer_pending(&qp->retrans_timer))
 		mod_timer(&qp->retrans_timer,
 			  jiffies + qp->qp_timeout_jiffies);
@@ -561,17 +552,20 @@ static void update_state(struct rxe_qp *qp, struct rxe_send_wqe *wqe,
 int rxe_requester(void *arg)
 {
 	struct rxe_qp *qp = (struct rxe_qp *)arg;
-	struct rxe_pkt_info *pkt;
+	struct rxe_pkt_info pkt;
+	struct sk_buff *skb;
 	struct rxe_send_wqe *wqe;
 	unsigned mask;
 	int payload;
 	int mtu;
 	int opcode;
+	int ret = 0;
 
-	if (!qp->valid || qp->req.state == QP_STATE_ERROR)
+next_wqe:
+	if (unlikely(!qp->valid || qp->req.state == QP_STATE_ERROR))
 		goto exit;
 
-	if (qp->req.state == QP_STATE_RESET) {
+	if (unlikely(qp->req.state == QP_STATE_RESET)) {
 		qp->req.wqe_index = consumer_index(qp->sq.queue);
 		qp->req.opcode = -1;
 		qp->req.need_rd_atomic = 0;
@@ -580,34 +574,34 @@ int rxe_requester(void *arg)
 		goto exit;
 	}
 
-	if (qp->req.need_retry) {
+	if (unlikely(qp->req.need_retry)) {
 		req_retry(qp);
 		qp->req.need_retry = 0;
 	}
 
 	wqe = req_next_wqe(qp);
-	if (!wqe)
+	if (unlikely(!wqe))
 		goto exit;
 
 	/* RC only, PSN window to prevent mixing new packets PSN
 	 * with old ones. According to IB SPEC this number is
 	 * half of the PSN range (2^24).
 	 */
-	if (qp_type(qp) == IB_QPT_RC)  {
-		if (qp->req.psn > (qp->comp.psn + RXE_MAX_UNACKED_PSNS)) {
-			qp->req.wait_psn = 1;
-			goto exit;
-		}
+	if (unlikely(qp_type(qp) == IB_QPT_RC &&
+		     qp->req.psn > (qp->comp.psn + RXE_MAX_UNACKED_PSNS))) {
+		qp->req.wait_psn = 1;
+		goto exit;
 	}
 
 	/* Limit the number of inflight SKBs per QP */
-	if (atomic_read(&qp->req_skb_out) > RXE_MAX_INFLIGHT_SKBS_PER_QP) {
+	if (unlikely(atomic_read(&qp->req_skb_out) >
+		     RXE_INFLIGHT_SKBS_PER_QP_HIGH)) {
 		qp->need_req_skb = 1;
 		goto exit;
 	}
 
 	opcode = next_opcode(qp, wqe, wqe->ibwr.opcode);
-	if (opcode < 0) {
+	if (unlikely(opcode < 0)) {
 		wqe->status = IB_WC_LOC_QP_OP_ERR;
 		/* TODO most be more to do here ?? */
 		goto exit;
@@ -643,30 +637,45 @@ int rxe_requester(void *arg)
 		payload = mtu;
 	}
 
-	pkt = init_req_packet(qp, wqe, opcode, payload);
-	if (!pkt) {
+	skb = init_req_packet(qp, wqe, opcode, payload, &pkt);
+	if (unlikely(!skb)) {
+		pr_err("Failed allocating skb\n");
+		goto err;
+	}
+
+	if (fill_packet(qp, wqe, &pkt, skb, payload)) {
+		pr_debug("Error during fill packet\n");
+		goto err;
+	}
+
+	ret = rxe_xmit_packet(to_rdev(qp->ibqp.device), qp, &pkt, skb);
+	if (ret) {
 		qp->need_req_skb = 1;
-		goto exit;
+		kfree_skb(skb);
+
+		if (-EAGAIN == ret) {
+			rxe_run_task(&qp->req.task, 1);
+			goto exit;
+		}
+
+		goto err;
 	}
 
-	if (fill_packet(qp, wqe, pkt, payload)) {
-		wqe->status = IB_WC_LOC_PROT_ERR;
-		wqe->state = wqe_state_error;
-		goto complete;
-	}
+	update_state(qp, wqe, &pkt, payload);
 
-	update_state(qp, wqe, pkt, payload);
+	goto next_wqe;
 
-	arbiter_skb_queue(to_rdev(qp->ibqp.device), qp, PKT_TO_SKB(pkt));
-
-	goto done;
+err:
+	kfree_skb(skb);
+	wqe->status = IB_WC_LOC_PROT_ERR;
+	wqe->state = wqe_state_error;
 
 complete:
 	if (qp_type(qp) != IB_QPT_RC) {
 		while (rxe_completer(qp) == 0)
 			;
 	}
-done:
+
 	return 0;
 
 exit:

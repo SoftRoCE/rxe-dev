@@ -591,6 +591,7 @@ out:
 
 static struct sk_buff *prepare_ack_packet(struct rxe_qp *qp,
 					  struct rxe_pkt_info *pkt,
+					  struct rxe_pkt_info *ack,
 					  int opcode,
 					  int payload,
 					  u32 psn,
@@ -598,9 +599,11 @@ static struct sk_buff *prepare_ack_packet(struct rxe_qp *qp,
 {
 	struct rxe_dev *rxe = to_rdev(qp->ibqp.device);
 	struct sk_buff *skb;
-	struct rxe_pkt_info *ack;
+	u32 crc = 0;
+	u32 *p;
 	int paylen;
 	int pad;
+	int err;
 
 	/*
 	 * allocate packet
@@ -608,14 +611,13 @@ static struct sk_buff *prepare_ack_packet(struct rxe_qp *qp,
 	pad = (-payload) & 0x3;
 	paylen = rxe_opcode[opcode].length + payload + pad + RXE_ICRC_SIZE;
 
-	skb = rxe->ifc_ops->init_packet(rxe, &qp->pri_av, paylen);
+	skb = rxe->ifc_ops->init_packet(rxe, &qp->pri_av, paylen, ack);
 	if (!skb)
 		return NULL;
 
 	atomic_inc(&qp->resp_skb_out);
 	atomic_inc(&rxe->resp_skb_out);
 
-	ack = SKB_TO_PKT(skb);
 	ack->qp = qp;
 	ack->opcode = opcode;
 	ack->mask |= rxe_opcode[opcode].mask;
@@ -641,6 +643,16 @@ static struct sk_buff *prepare_ack_packet(struct rxe_qp *qp,
 	if (ack->mask & RXE_ATMACK_MASK)
 		atmack_set_orig(ack, qp->resp.atomic_orig);
 
+	err = rxe->ifc_ops->prepare(rxe, ack, skb);
+	if (err) {
+		kfree_skb(skb);
+		return NULL;
+	}
+
+	crc = rxe_icrc_hdr(ack, skb);
+	p = payload_addr(ack) + payload;
+	*p = ~crc;
+
 	return skb;
 }
 
@@ -650,11 +662,11 @@ static enum resp_states read_reply(struct rxe_qp *qp,
 				   struct rxe_pkt_info *req_pkt)
 {
 	struct rxe_dev *rxe = to_rdev(qp->ibqp.device);
-	struct rxe_pkt_info *pkt;
+	struct rxe_pkt_info ack_pkt;
+	struct sk_buff *skb;
 	int mtu = qp->mtu;
 	enum resp_states state;
 	int payload;
-	struct sk_buff *skb;
 	int opcode;
 	int err;
 	struct resp_res *res = qp->resp.res;
@@ -705,23 +717,32 @@ static enum resp_states read_reply(struct rxe_qp *qp,
 
 	payload = min_t(int, res->read.resid, mtu);
 
-	skb = prepare_ack_packet(qp, req_pkt, opcode, payload,
+	skb = prepare_ack_packet(qp, req_pkt, &ack_pkt, opcode, payload,
 				 res->cur_psn, AETH_ACK_UNLIMITED);
 	if (!skb)
 		return RESPST_ERR_RNR;
 
-	pkt = SKB_TO_PKT(skb);
+	err = rxe->ifc_ops->prepare(rxe, &ack_pkt, skb);
+	if (err) {
+		kfree_skb(skb);
+		return RESPST_ERROR;
+	}
 
-	err = rxe_mem_copy(res->read.mr, res->read.va, payload_addr(pkt),
+	err = rxe_mem_copy(res->read.mr, res->read.va, payload_addr(&ack_pkt),
 			   payload, direction_out, NULL);
 	if (err)
 		pr_warn("rxe_mem_copy failed TODO ???\n");
 
+	err = rxe_xmit_packet(rxe, qp, &ack_pkt, skb);
+	if (err) {
+		pr_err("Failed sending RDMA reply.\n");
+		kfree_skb(skb);
+		return RESPST_ERR_RNR;
+	}
+
 	res->read.va += payload;
 	res->read.resid -= payload;
 	res->cur_psn = (res->cur_psn + 1) & BTH_PSN_MASK;
-
-	arbiter_skb_queue(rxe, qp, skb);
 
 	if (res->read.resid > 0) {
 		state = RESPST_DONE;
@@ -903,17 +924,22 @@ static int send_ack(struct rxe_qp *qp, struct rxe_pkt_info *pkt,
 		    u8 syndrome, u32 psn)
 {
 	int err = 0;
+	struct rxe_pkt_info ack_pkt;
 	struct sk_buff *skb;
 	struct rxe_dev *rxe = to_rdev(qp->ibqp.device);
 
-	skb = prepare_ack_packet(qp, pkt, IB_OPCODE_RC_ACKNOWLEDGE,
+	skb = prepare_ack_packet(qp, pkt, &ack_pkt, IB_OPCODE_RC_ACKNOWLEDGE,
 				 0, psn, syndrome);
 	if (skb == NULL) {
 		err = -ENOMEM;
 		goto err1;
 	}
 
-	arbiter_skb_queue(rxe, qp, skb);
+	err = rxe_xmit_packet(rxe, qp, &ack_pkt, skb);
+	if (err) {
+		pr_err("Failed sending ack. This flow is not handled - skb ignored\n");
+		kfree_skb(skb);
+	}
 
 err1:
 	return err;
@@ -923,13 +949,15 @@ static int send_atomic_ack(struct rxe_qp *qp, struct rxe_pkt_info *pkt,
 			   u8 syndrome)
 {
 	int rc = 0;
+	struct rxe_pkt_info ack_pkt;
 	struct sk_buff *skb;
 	struct sk_buff *skb_copy;
 	struct rxe_dev *rxe = to_rdev(qp->ibqp.device);
 	struct resp_res *res;
 
-	skb = prepare_ack_packet(qp, pkt, IB_OPCODE_RC_ATOMIC_ACKNOWLEDGE,
-				 0, pkt->psn, syndrome);
+	skb = prepare_ack_packet(qp, pkt, &ack_pkt,
+				 IB_OPCODE_RC_ATOMIC_ACKNOWLEDGE, 0, pkt->psn,
+				 syndrome);
 	if (skb == NULL) {
 		rc = -ENOMEM;
 		goto out;
@@ -954,7 +982,14 @@ static int send_atomic_ack(struct rxe_qp *qp, struct rxe_pkt_info *pkt,
 		pr_warn("Could not clone atomic response\n");
 	}
 
-	arbiter_skb_queue(rxe, qp, skb_copy);
+	rc = rxe_xmit_packet(rxe, qp, &ack_pkt, skb_copy);
+	if (rc) {
+		pr_err("Failed sending atomic ack. This flow is not handled - skb ignored\n");
+		atomic_dec(&rxe->resp_skb_out);
+		atomic_dec(&qp->resp_skb_out);
+		rxe_drop_ref(qp);
+		kfree_skb(skb_copy);
+	}
 
 out:
 	return rc;
@@ -1096,8 +1131,14 @@ static enum resp_states duplicate_request(struct rxe_qp *qp,
 			bth_set_psn(SKB_TO_PKT(skb_copy),
 				    qp->resp.psn - 1);
 			/* Resend the result. */
-			arbiter_skb_queue(to_rdev(qp->ibqp.device), qp,
-					  skb_copy);
+			rc = rxe_xmit_packet(to_rdev(qp->ibqp.device), qp,
+					     pkt, skb_copy);
+			if (rc) {
+				pr_err("Failed resending result. This flow is not handled - skb ignored\n");
+				kfree_skb(skb_copy);
+				rc = RESPST_CLEANUP;
+				goto out;
+			}
 		}
 
 		/* Resource not found. Class D error. Drop the request. */

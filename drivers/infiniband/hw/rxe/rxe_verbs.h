@@ -299,6 +299,8 @@ struct rxe_qp {
 	struct rxe_sq		sq;
 	struct rxe_rq		rq;
 
+	struct socket		*sk;
+
 	struct rxe_av		pri_av;
 	struct rxe_av		alt_av;
 
@@ -317,7 +319,6 @@ struct rxe_qp {
 
 	struct ib_udata		*udata;
 
-	struct list_head	arbiter_list;
 	atomic_t		ssn;
 	atomic_t		req_skb_in;
 	atomic_t		resp_skb_in;
@@ -436,15 +437,6 @@ struct rxe_port {
 	u32			qp_gsi_index;
 };
 
-struct rxe_arbiter {
-	struct rxe_task		task;
-	struct list_head	qp_list;
-	spinlock_t		list_lock; /* list lock */
-	struct timer_list	timer;
-	int			skb_count;
-	int			queue_stalled;
-};
-
 /* callbacks from ib_rxe to network interface layer */
 struct rxe_ifc_ops {
 	void (*release)(struct rxe_dev *rxe);
@@ -453,10 +445,13 @@ struct rxe_ifc_ops {
 	struct device *(*dma_device)(struct rxe_dev *rxe);
 	int (*mcast_add)(struct rxe_dev *rxe, union ib_gid *mgid);
 	int (*mcast_delete)(struct rxe_dev *rxe, union ib_gid *mgid);
-	int (*send)(struct rxe_dev *rxe, struct sk_buff *skb);
+	int (*prepare)(struct rxe_dev *rxe, struct rxe_pkt_info *pkt,
+		       struct sk_buff *skb);
+	int (*send)(struct rxe_dev *rxe, struct rxe_pkt_info *pkt,
+		    struct sk_buff *skb);
 	int (*loopback)(struct sk_buff *skb);
 	struct sk_buff *(*init_packet)(struct rxe_dev *rxe, struct rxe_av *av,
-				       int paylen);
+				       int paylen, struct rxe_pkt_info *pkt);
 	int (*init_av)(struct rxe_dev *rxe, struct ib_ah_attr *attr,
 		       struct rxe_av *av);
 	char *(*parent_name)(struct rxe_dev *rxe, unsigned int port_num);
@@ -475,7 +470,6 @@ struct rxe_dev {
 
 	struct net_device	*ndev;
 
-	struct rxe_arbiter	arbiter;
 
 	atomic_t		ind;
 

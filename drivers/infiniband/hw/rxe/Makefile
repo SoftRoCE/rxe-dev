@@ -17,7 +17,6 @@ ib_rxe-y := \
 	rxe_dma.o \
 	rxe_opcode.o \
 	rxe_mmap.o \
-	rxe_arbiter.o \
 	rxe_icrc.o \
 	rxe_mcast.o \
 	rxe_task.o \

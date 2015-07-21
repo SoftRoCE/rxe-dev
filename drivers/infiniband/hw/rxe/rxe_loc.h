@@ -240,18 +240,11 @@ extern struct ib_dma_mapping_ops rxe_dma_mapping_ops;
 
 void rxe_release(struct kref *kref);
 
-void arbiter_skb_queue(struct rxe_dev *rxe,
-		       struct rxe_qp *qp, struct sk_buff *skb);
-
-void rxe_arbiter_timer(unsigned long arg);
-
-int rxe_arbiter(void *arg);
 int rxe_completer(void *arg);
 int rxe_requester(void *arg);
 int rxe_responder(void *arg);
 
-u32 rxe_icrc_hdr(struct rxe_pkt_info *pkt);
-u32 rxe_icrc_pkt(struct rxe_pkt_info *pkt);
+u32 rxe_icrc_hdr(struct rxe_pkt_info *pkt, struct sk_buff *skb);
 
 void rxe_resp_queue_pkt(struct rxe_dev *rxe,
 			struct rxe_qp *qp, struct sk_buff *skb);
@@ -262,6 +255,67 @@ void rxe_comp_queue_pkt(struct rxe_dev *rxe,
 static inline unsigned wr_opcode_mask(int opcode, struct rxe_qp *qp)
 {
 	return rxe_wr_opcode_info[opcode].mask[qp->ibqp.qp_type];
+}
+
+static inline void account_skb(struct rxe_dev *rxe, struct rxe_qp *qp,
+			       int is_request)
+{
+	if (is_request & RXE_REQ_MASK) {
+		atomic_dec(&rxe->req_skb_out);
+		atomic_dec(&qp->req_skb_out);
+		if (qp->need_req_skb) {
+			if (atomic_read(&qp->req_skb_out) <
+					RXE_INFLIGHT_SKBS_PER_QP_LOW)
+				rxe_run_task(&qp->req.task, 1);
+		}
+	} else {
+		atomic_dec(&rxe->resp_skb_out);
+		atomic_dec(&qp->resp_skb_out);
+	}
+}
+
+static inline int rxe_xmit_packet(struct rxe_dev *rxe, struct rxe_qp *qp,
+				  struct rxe_pkt_info *pkt, struct sk_buff *skb)
+{
+	int err;
+	int is_request = pkt->mask & RXE_REQ_MASK;
+
+	/* drop pkt if qp is in wrong state to send */
+	if (!qp->valid)
+		goto drop;
+
+	if ((is_request && (qp->req.state != QP_STATE_READY)) ||
+	    (!is_request && (qp->resp.state != QP_STATE_READY))) {
+		pr_info("Packet dropped. QP is not in ready state\n");
+		goto drop;
+	}
+
+	if (pkt->mask & RXE_LOOPBACK_MASK)
+		err = rxe->ifc_ops->loopback(skb);
+	else
+		err = rxe->ifc_ops->send(rxe, pkt, skb);
+
+	if (err) {
+		rxe->xmit_errors++;
+		return err;
+	}
+
+	atomic_inc(&qp->req_skb_out);
+	atomic_inc(&rxe->req_skb_out);
+
+	if ((qp_type(qp) != IB_QPT_RC) &&
+	    (pkt->mask & RXE_END_MASK)) {
+		pkt->wqe->state = wqe_state_done;
+		rxe_run_task(&qp->comp.task, 1);
+	}
+
+	goto done;
+
+drop:
+	kfree_skb(skb);
+	err = 0;
+done:
+	return err;
 }
 
 #endif /* RXE_LOC_H */

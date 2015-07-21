@@ -176,7 +176,8 @@ enum rxe_device_param {
 	RXE_MAX_UNACKED_PSNS		= 0x800000,
 
 	/* Max inflight SKBs per queue pair */
-	RXE_MAX_INFLIGHT_SKBS_PER_QP	= 64,
+	RXE_INFLIGHT_SKBS_PER_QP_HIGH	= 64,
+	RXE_INFLIGHT_SKBS_PER_QP_LOW	= 16,
 
 	/* Delay before calling arbiter timer */
 	RXE_NSEC_ARB_TIMER_DELAY	= 200,

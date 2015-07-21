@@ -64,9 +64,6 @@ static void rxe_cleanup_ports(struct rxe_dev *rxe)
    must have been destroyed */
 static void rxe_cleanup(struct rxe_dev *rxe)
 {
-	del_timer_sync(&rxe->arbiter.timer);
-	rxe_cleanup_task(&rxe->arbiter.task);
-
 	rxe_pool_cleanup(&rxe->uc_pool);
 	rxe_pool_cleanup(&rxe->pd_pool);
 	rxe_pool_cleanup(&rxe->ah_pool);
@@ -350,16 +347,6 @@ static int rxe_init(struct rxe_dev *rxe)
 	spin_lock_init(&rxe->mmap_offset_lock);
 	spin_lock_init(&rxe->pending_lock);
 	INIT_LIST_HEAD(&rxe->pending_mmaps);
-
-	/* init arbiter */
-	spin_lock_init(&rxe->arbiter.list_lock);
-	INIT_LIST_HEAD(&rxe->arbiter.qp_list);
-	rxe_init_task(rxe, &rxe->arbiter.task,
-		      rxe, rxe_arbiter, "arb");
-	setup_timer(&rxe->arbiter.timer,
-		    rxe_arbiter_timer,
-		    (unsigned long)rxe);
-	rxe->arbiter.skb_count = 0;
 
 	return 0;
 

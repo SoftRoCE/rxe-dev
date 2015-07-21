@@ -217,7 +217,6 @@ static void rxe_qp_init_misc(struct rxe_dev *rxe, struct rxe_qp *qp,
 		break;
 	}
 
-	INIT_LIST_HEAD(&qp->arbiter_list);
 	INIT_LIST_HEAD(&qp->grp_list);
 
 	skb_queue_head_init(&qp->send_pkts);
@@ -238,6 +237,11 @@ static int rxe_qp_init_req(struct rxe_dev *rxe, struct rxe_qp *qp,
 {
 	int err;
 	int wqe_size;
+
+	err = sock_create_kern(AF_INET, SOCK_DGRAM, 0, &qp->sk);
+	if (err < 0)
+		return err;
+	qp->sk->sk->sk_user_data = qp;
 
 	qp->sq.max_wr		= init->cap.max_send_wr;
 	qp->sq.max_sge		= init->cap.max_send_sge;
@@ -785,8 +789,6 @@ int rxe_qp_to_attr(struct rxe_qp *qp, struct ib_qp_attr *attr, int mask)
 /* called by the destroy qp verb */
 void rxe_qp_destroy(struct rxe_qp *qp)
 {
-	struct rxe_dev *rxe = to_rdev(qp->ibqp.device);
-
 	qp->valid = 0;
 	qp->qp_timeout_jiffies = 0;
 	rxe_cleanup_task(&qp->resp.task);
@@ -804,10 +806,6 @@ void rxe_qp_destroy(struct rxe_qp *qp)
 		__rxe_do_task(&qp->comp.task);
 		__rxe_do_task(&qp->req.task);
 	}
-
-	/* drain the output queue */
-	while (!list_empty(&qp->arbiter_list))
-		__rxe_do_task(&rxe->arbiter.task);
 }
 
 /* called when the last reference to the qp is dropped */
@@ -839,4 +837,6 @@ void rxe_qp_cleanup(void *arg)
 	}
 
 	free_rd_atomic_resources(qp);
+
+	kernel_sock_shutdown(qp->sk, SHUT_RDWR);
 }

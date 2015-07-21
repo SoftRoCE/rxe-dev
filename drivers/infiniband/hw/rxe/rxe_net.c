@@ -130,7 +130,7 @@ static struct rtable *rxe_find_route4(struct in_addr *saddr,
 				      struct in_addr *daddr)
 {
 	struct rtable *rt;
-	struct flowi4 fl;
+	struct flowi4 fl = { { 0 } };
 
 	memset(&fl, 0, sizeof(fl));
 	memcpy(&fl.saddr, saddr, sizeof(*saddr));
@@ -151,7 +151,7 @@ static struct dst_entry *rxe_find_route6(struct net_device *ndev,
 					 struct in6_addr *daddr)
 {
 	struct dst_entry *ndst;
-	struct flowi6 fl6;
+	struct flowi6 fl6 = { { 0 } };
 
 	memset(&fl6, 0, sizeof(fl6));
 	fl6.flowi6_oif = ndev->ifindex;
@@ -159,12 +159,13 @@ static struct dst_entry *rxe_find_route6(struct net_device *ndev,
 	memcpy(&fl6.daddr, daddr, sizeof(*daddr));
 	fl6.flowi6_proto = IPPROTO_UDP;
 
-	if (ipv6_stub->ipv6_dst_lookup(addr_info.sock6->sk, &ndst, &fl6)) {
+	if (unlikely(ipv6_stub->ipv6_dst_lookup(addr_info.sock6->sk, &ndst,
+						&fl6))) {
 		pr_err("no route to %pI6\n", daddr);
 		goto put;
 	}
 
-	if (ndst->error) {
+	if (unlikely(ndst->error)) {
 		pr_err("no route to %pI6\n", daddr);
 		goto put;
 	}
@@ -247,27 +248,23 @@ static void rxe_release_udp_tunnel(struct socket *sk)
 	udp_tunnel_sock_release(sk);
 }
 
-static int send(struct rxe_dev *rxe, struct sk_buff *skb)
+static struct rxe_av *get_av(struct rxe_pkt_info *pkt)
+{
+	if (qp_type(pkt->qp) == IB_QPT_RC || qp_type(pkt->qp) == IB_QPT_UC)
+		return &pkt->qp->pri_av;
+
+	return &pkt->wqe->av;
+}
+
+int prepare(struct rxe_dev *rxe, struct rxe_pkt_info *pkt,
+	    struct sk_buff *skb)
 {
 	int sent_bytes = 0;
-	struct sk_buff *nskb;
-	size_t payload;
-	struct rxe_pkt_info *npkt = SKB_TO_PKT(skb);
 	bool csum_nocheck = true;
-	struct rxe_pkt_info *pkt = SKB_TO_PKT(skb);
 	struct rxe_av *av;
-	int err;
-	u32 *crc;
 	struct iphdr *iph;
 
-	if (qp_type(pkt->qp) == IB_QPT_RC || qp_type(pkt->qp) == IB_QPT_UC)
-		av = &pkt->qp->pri_av;
-	else
-		av = &pkt->wqe->av;
-
-	nskb = skb_clone(skb, GFP_ATOMIC);
-	if (!nskb)
-		return -ENOMEM;
+	av = get_av(pkt);
 
 	if (av->network_type == RDMA_NETWORK_IPV4) {
 		__be16 df = htons(IP_DF);
@@ -277,11 +274,11 @@ static int send(struct rxe_dev *rxe, struct sk_buff *skb)
 		struct rtable *rt = rxe_find_route4(saddr, daddr);
 
 		if (!rt) {
-			kfree(nskb);
+			pr_err("Host not reachable\n");
 			return -EHOSTUNREACH;
 		}
 
-		udp_tunnel_prepare_skb(rt, nskb, saddr->s_addr,
+		udp_tunnel_prepare_skb(rt, skb, saddr->s_addr,
 				       daddr->s_addr,
 				       av->attr.grh.traffic_class,
 				       av->attr.grh.hop_limit,
@@ -290,25 +287,15 @@ static int send(struct rxe_dev *rxe, struct sk_buff *skb)
 				       xnet,
 				       csum_nocheck);
 
-		sent_bytes = nskb->len;
-		iptunnel_prepare(rt, nskb, saddr->s_addr,
+		sent_bytes = skb->len;
+		iptunnel_prepare(rt, skb, saddr->s_addr,
 				 daddr->s_addr, IPPROTO_UDP,
 				 av->attr.grh.traffic_class,
 				 av->attr.grh.hop_limit, df, xnet);
 
-		iph = ip_hdr(nskb);
-		iph->tot_len = htons(nskb->len);
+		iph = ip_hdr(skb);
+		iph->tot_len = htons(skb->len);
 		ip_send_check(iph);
-
-		/* CRC */
-		npkt = SKB_TO_PKT(nskb);
-		payload = payload_size(npkt);
-		crc = payload_addr(npkt) + payload;
-		*crc = rxe_icrc_pkt(npkt);
-
-		err = ip_local_out_sk(nskb->sk, nskb);
-		if (unlikely(net_xmit_eval(err)))
-			sent_bytes = 0;
 
 	} else if (av->network_type == RDMA_NETWORK_IPV6) {
 		struct in6_addr *saddr = &av->sgid_addr._sockaddr_in6.sin6_addr;
@@ -317,11 +304,11 @@ static int send(struct rxe_dev *rxe, struct sk_buff *skb)
 							saddr, daddr);
 
 		if (!dst) {
-			kfree(nskb);
+			pr_err("Host not reachable\n");
 			return -EHOSTUNREACH;
 		}
 
-		udp_tunnel6_prepare_skb(dst, nskb, rxe->ndev,
+		udp_tunnel6_prepare_skb(dst, skb, rxe->ndev,
 					saddr, daddr,
 					av->attr.grh.traffic_class,
 					av->attr.grh.hop_limit,
@@ -329,23 +316,56 @@ static int send(struct rxe_dev *rxe, struct sk_buff *skb)
 					htons(ROCE_V2_UDP_DPORT),
 					csum_nocheck);
 
-		ip6_set_len(nskb);
+		ip6_set_len(skb);
+	}
+	return 0;
+}
 
-		/* CRC */
-		npkt = SKB_TO_PKT(nskb);
-		payload = payload_size(npkt);
-		crc = payload_addr(npkt) + payload;
-		*crc = rxe_icrc_pkt(npkt);
+static void rxe_skb_tx_dtor(struct sk_buff *skb)
+{
+	struct sock *sk = skb->sk;
+	struct rxe_qp *qp = sk->sk_user_data;
+	struct rxe_dev *rxe = to_rdev(qp->ibqp.device);
 
-		sent_bytes = ip6tunnel_xmit(nskb->sk, nskb, rxe->ndev);
+	account_skb(rxe, qp, RXE_REQ_MASK);
+}
+
+static int send(struct rxe_dev *rxe, struct rxe_pkt_info *pkt,
+		struct sk_buff *skb)
+{
+	struct sk_buff *nskb;
+	struct rxe_av *av;
+	int sent_bytes;
+	int err;
+
+	av = get_av(pkt);
+
+	nskb = skb_clone(skb, GFP_ATOMIC);
+	if (!nskb)
+		return -ENOMEM;
+
+	nskb->destructor = rxe_skb_tx_dtor;
+	nskb->sk = pkt->qp->sk->sk;
+
+	sent_bytes = nskb->len;
+	if (av->network_type == RDMA_NETWORK_IPV4) {
+		err = ip_local_out_sk(nskb->sk, nskb);
+	} else if (av->network_type == RDMA_NETWORK_IPV6) {
+		err = ip6_local_out_sk(nskb->sk, nskb);
+	} else {
+		pr_err("Unknown layer 3 protocol: %d\n", av->network_type);
+		kfree_skb(nskb);
+		return -EINVAL;
 	}
 
-	if (sent_bytes > 0) {
-		kfree_skb(skb);
-		return 0;
+	if (unlikely(net_xmit_eval(err))) {
+		pr_debug("error sending packet: %d\n", err);
+		return -EAGAIN;
 	}
 
-	return sent_bytes < 0 ? sent_bytes : -EAGAIN;
+	kfree_skb(skb);
+
+	return 0;
 }
 
 static int loopback(struct sk_buff *skb)
@@ -362,21 +382,21 @@ static inline int addr_same(struct rxe_dev *rxe, struct rxe_av *av)
 }
 
 static struct sk_buff *init_packet(struct rxe_dev *rxe, struct rxe_av *av,
-				   int paylen)
+				   int paylen, struct rxe_pkt_info *pkt)
 {
+	unsigned int hdr_len;
 	struct sk_buff *skb;
-	struct rxe_pkt_info *pkt;
-	unsigned int hdr_len = sizeof(struct ethhdr) +
-			       sizeof(struct udphdr);
 
 	if (av->network_type == RDMA_NETWORK_IPV4)
-		hdr_len += sizeof(struct iphdr);
+		hdr_len = ETH_HLEN + sizeof(struct udphdr) +
+			sizeof(struct iphdr);
 	else
-		hdr_len += sizeof(struct ipv6hdr);
+		hdr_len = ETH_HLEN + sizeof(struct udphdr) +
+			sizeof(struct ipv6hdr);
 
 	skb = alloc_skb(paylen + hdr_len + LL_RESERVED_SPACE(rxe->ndev),
 			GFP_ATOMIC);
-	if (!skb)
+	if (unlikely(!skb))
 		return NULL;
 
 	skb_reserve(skb, hdr_len + LL_RESERVED_SPACE(rxe->ndev));
@@ -387,7 +407,6 @@ static struct sk_buff *init_packet(struct rxe_dev *rxe, struct rxe_av *av,
 	else
 		skb->protocol = htons(ETH_P_IPV6);
 
-	pkt		= SKB_TO_PKT(skb);
 	pkt->rxe	= rxe;
 	pkt->port_num	= 1;
 	pkt->hdr	= skb_put(skb, paylen);
@@ -427,6 +446,7 @@ static struct rxe_ifc_ops ifc_ops = {
 	.dma_device	= dma_device,
 	.mcast_add	= mcast_add,
 	.mcast_delete	= mcast_delete,
+	.prepare	= prepare,
 	.send		= send,
 	.loopback	= loopback,
 	.init_packet	= init_packet,
