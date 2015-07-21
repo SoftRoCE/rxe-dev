@@ -257,23 +257,6 @@ static inline unsigned wr_opcode_mask(int opcode, struct rxe_qp *qp)
 	return rxe_wr_opcode_info[opcode].mask[qp->ibqp.qp_type];
 }
 
-static inline void account_skb(struct rxe_dev *rxe, struct rxe_qp *qp,
-			       int is_request)
-{
-	if (is_request & RXE_REQ_MASK) {
-		atomic_dec(&rxe->req_skb_out);
-		atomic_dec(&qp->req_skb_out);
-		if (qp->need_req_skb) {
-			if (atomic_read(&qp->req_skb_out) <
-					RXE_INFLIGHT_SKBS_PER_QP_LOW)
-				rxe_run_task(&qp->req.task, 1);
-		}
-	} else {
-		atomic_dec(&rxe->resp_skb_out);
-		atomic_dec(&qp->resp_skb_out);
-	}
-}
-
 static inline int rxe_xmit_packet(struct rxe_dev *rxe, struct rxe_qp *qp,
 				  struct rxe_pkt_info *pkt, struct sk_buff *skb)
 {
@@ -300,8 +283,7 @@ static inline int rxe_xmit_packet(struct rxe_dev *rxe, struct rxe_qp *qp,
 		return err;
 	}
 
-	atomic_inc(&qp->req_skb_out);
-	atomic_inc(&rxe->req_skb_out);
+	atomic_inc(&qp->skb_out);
 
 	if ((qp_type(qp) != IB_QPT_RC) &&
 	    (pkt->mask & RXE_END_MASK)) {

@@ -114,9 +114,6 @@ void rxe_resp_queue_pkt(struct rxe_dev *rxe, struct rxe_qp *qp,
 	int must_sched;
 	struct rxe_pkt_info *pkt = SKB_TO_PKT(skb);
 
-	atomic_inc(&qp->req_skb_in);
-	atomic_inc(&rxe->req_skb_in);
-
 	skb_queue_tail(&qp->req_pkts, skb);
 
 	must_sched = (pkt->opcode == IB_OPCODE_RC_RDMA_READ_REQUEST) ||
@@ -128,7 +125,6 @@ void rxe_resp_queue_pkt(struct rxe_dev *rxe, struct rxe_qp *qp,
 static inline enum resp_states get_req(struct rxe_qp *qp,
 				       struct rxe_pkt_info **pkt_p)
 {
-	struct rxe_dev *rxe = to_rdev(qp->ibqp.device);
 	struct sk_buff *skb;
 
 	if (qp->resp.state == QP_STATE_ERROR) {
@@ -137,8 +133,6 @@ static inline enum resp_states get_req(struct rxe_qp *qp,
 			/* drain request packet queue */
 			rxe_drop_ref(qp);
 			kfree_skb(skb);
-			atomic_dec(&qp->req_skb_in);
-			atomic_dec(&rxe->req_skb_in);
 			return RESPST_GET_REQ;
 		}
 
@@ -615,9 +609,6 @@ static struct sk_buff *prepare_ack_packet(struct rxe_qp *qp,
 	if (!skb)
 		return NULL;
 
-	atomic_inc(&qp->resp_skb_out);
-	atomic_inc(&rxe->resp_skb_out);
-
 	ack->qp = qp;
 	ack->opcode = opcode;
 	ack->mask |= rxe_opcode[opcode].mask;
@@ -974,19 +965,14 @@ static int send_atomic_ack(struct rxe_qp *qp, struct rxe_pkt_info *pkt,
 	res->cur_psn = qp->resp.psn;
 
 	skb_copy = skb_clone(skb, GFP_ATOMIC);
-	if (skb_copy) {
+	if (skb_copy)
 		rxe_add_ref(qp); /* for the new SKB */
-		atomic_inc(&qp->resp_skb_out);
-		atomic_inc(&rxe->resp_skb_out);
-	} else {
+	else
 		pr_warn("Could not clone atomic response\n");
-	}
 
 	rc = rxe_xmit_packet(rxe, qp, &ack_pkt, skb_copy);
 	if (rc) {
 		pr_err("Failed sending atomic ack. This flow is not handled - skb ignored\n");
-		atomic_dec(&rxe->resp_skb_out);
-		atomic_dec(&qp->resp_skb_out);
 		rxe_drop_ref(qp);
 		kfree_skb(skb_copy);
 	}
@@ -1015,14 +1001,11 @@ static enum resp_states cleanup(struct rxe_qp *qp,
 				struct rxe_pkt_info *pkt)
 {
 	struct sk_buff *skb;
-	struct rxe_dev *rxe = to_rdev(qp->ibqp.device);
 
 	if (pkt) {
 		skb = skb_dequeue(&qp->req_pkts);
 		rxe_drop_ref(qp);
 		kfree_skb(skb);
-		atomic_dec(&qp->req_skb_in);
-		atomic_dec(&rxe->req_skb_in);
 	}
 
 	if (qp->resp.mr) {
@@ -1056,7 +1039,6 @@ static enum resp_states duplicate_request(struct rxe_qp *qp,
 					  struct rxe_pkt_info *pkt)
 {
 	enum resp_states rc;
-	struct rxe_dev *rxe = to_rdev(qp->ibqp.device);
 
 	if (pkt->mask & RXE_SEND_MASK ||
 	    pkt->mask & RXE_WRITE_MASK) {
@@ -1121,8 +1103,6 @@ static enum resp_states duplicate_request(struct rxe_qp *qp,
 			skb_copy = skb_clone(res->atomic.skb, GFP_ATOMIC);
 			if (skb_copy) {
 				rxe_add_ref(qp); /* for the new SKB */
-				atomic_inc(&qp->resp_skb_out);
-				atomic_inc(&rxe->resp_skb_out);
 			} else {
 				pr_warn("Couldn't clone atomic resp\n");
 				rc = RESPST_CLEANUP;
@@ -1196,7 +1176,6 @@ static enum resp_states do_class_d1e_error(struct rxe_qp *qp)
 int rxe_responder(void *arg)
 {
 	struct rxe_qp *qp = (struct rxe_qp *)arg;
-	struct rxe_dev *rxe = to_rdev(qp->ibqp.device);
 	enum resp_states state;
 	struct rxe_pkt_info *pkt = NULL;
 	int ret = 0;
@@ -1364,8 +1343,6 @@ int rxe_responder(void *arg)
 			while ((skb = skb_dequeue(&qp->req_pkts))) {
 				rxe_drop_ref(qp);
 				kfree_skb(skb);
-				atomic_dec(&qp->req_skb_in);
-				atomic_dec(&rxe->req_skb_in);
 			}
 
 			while (!qp->srq && qp->rq.queue &&

@@ -594,7 +594,7 @@ next_wqe:
 	}
 
 	/* Limit the number of inflight SKBs per QP */
-	if (unlikely(atomic_read(&qp->req_skb_out) >
+	if (unlikely(atomic_read(&qp->skb_out) >
 		     RXE_INFLIGHT_SKBS_PER_QP_HIGH)) {
 		qp->need_req_skb = 1;
 		goto exit;

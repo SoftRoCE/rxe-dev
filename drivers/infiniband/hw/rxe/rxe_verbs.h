@@ -320,10 +320,7 @@ struct rxe_qp {
 	struct ib_udata		*udata;
 
 	atomic_t		ssn;
-	atomic_t		req_skb_in;
-	atomic_t		resp_skb_in;
-	atomic_t		req_skb_out;
-	atomic_t		resp_skb_out;
+	atomic_t		skb_out;
 	int			need_req_skb;
 
 	/* Timer for retranmitting packet when ACKs have been lost. RC
@@ -472,11 +469,6 @@ struct rxe_dev {
 
 
 	atomic_t		ind;
-
-	atomic_t		req_skb_in;
-	atomic_t		resp_skb_in;
-	atomic_t		req_skb_out;
-	atomic_t		resp_skb_out;
 
 	int			xmit_errors;
 

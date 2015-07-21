@@ -160,12 +160,9 @@ static void free_rd_atomic_resources(struct rxe_qp *qp)
 
 void free_rd_atomic_resource(struct rxe_qp *qp, struct resp_res *res)
 {
-	struct rxe_dev *rxe = to_rdev(qp->ibqp.device);
-
 	if (res->type == RXE_ATOMIC_MASK) {
 		rxe_drop_ref(qp);
 		kfree_skb(res->atomic.skb);
-		atomic_dec(&rxe->resp_skb_out);
 	} else if (res->type == RXE_READ_MASK) {
 		if (res->read.mr)
 			rxe_drop_ref(res->read.mr);
@@ -225,10 +222,7 @@ static void rxe_qp_init_misc(struct rxe_dev *rxe, struct rxe_qp *qp,
 	spin_lock_init(&qp->state_lock);
 
 	atomic_set(&qp->ssn, 0);
-	atomic_set(&qp->req_skb_in, 0);
-	atomic_set(&qp->resp_skb_in, 0);
-	atomic_set(&qp->req_skb_out, 0);
-	atomic_set(&qp->resp_skb_out, 0);
+	atomic_set(&qp->skb_out, 0);
 }
 
 static int rxe_qp_init_req(struct rxe_dev *rxe, struct rxe_qp *qp,

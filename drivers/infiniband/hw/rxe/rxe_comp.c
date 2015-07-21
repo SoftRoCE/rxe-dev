@@ -151,7 +151,6 @@ void rxe_comp_queue_pkt(struct rxe_dev *rxe, struct rxe_qp *qp,
 {
 	int must_sched;
 
-	atomic_inc(&rxe->resp_skb_in);
 	skb_queue_tail(&qp->resp_pkts, skb);
 
 	must_sched = skb_queue_len(&qp->resp_pkts) > 1;
@@ -502,7 +501,6 @@ static inline enum comp_state complete_wqe(struct rxe_qp *qp,
 int rxe_completer(void *arg)
 {
 	struct rxe_qp *qp = (struct rxe_qp *)arg;
-	struct rxe_dev *rxe = to_rdev(qp->ibqp.device);
 	struct rxe_send_wqe *wqe = wqe;
 	struct sk_buff *skb = NULL;
 	struct rxe_pkt_info *pkt = NULL;
@@ -512,7 +510,6 @@ int rxe_completer(void *arg)
 		while ((skb = skb_dequeue(&qp->resp_pkts))) {
 			rxe_drop_ref(qp);
 			kfree_skb(skb);
-			atomic_dec(&rxe->resp_skb_in);
 		}
 		skb = NULL;
 		pkt = NULL;
@@ -527,7 +524,6 @@ int rxe_completer(void *arg)
 		while ((skb = skb_dequeue(&qp->resp_pkts))) {
 			rxe_drop_ref(qp);
 			kfree_skb(skb);
-			atomic_dec(&rxe->resp_skb_in);
 		}
 		skb = NULL;
 		pkt = NULL;
@@ -544,7 +540,6 @@ int rxe_completer(void *arg)
 		while ((skb = skb_dequeue(&qp->resp_pkts))) {
 			rxe_drop_ref(qp);
 			kfree_skb(skb);
-			atomic_dec(&rxe->resp_skb_in);
 		}
 		skb = NULL;
 		pkt = NULL;
@@ -636,7 +631,6 @@ int rxe_completer(void *arg)
 			if (pkt) {
 				rxe_drop_ref(pkt->qp);
 				kfree_skb(skb);
-				atomic_dec(&rxe->resp_skb_in);
 			}
 			goto done;
 

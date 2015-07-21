@@ -337,12 +337,6 @@ static int rxe_init(struct rxe_dev *rxe)
 	if (err)
 		goto err2;
 
-	/* init packet counters */
-	atomic_set(&rxe->req_skb_in, 0);
-	atomic_set(&rxe->resp_skb_in, 0);
-	atomic_set(&rxe->req_skb_out, 0);
-	atomic_set(&rxe->resp_skb_out, 0);
-
 	/* init pending mmap list */
 	spin_lock_init(&rxe->mmap_offset_lock);
 	spin_lock_init(&rxe->pending_lock);

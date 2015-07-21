@@ -325,9 +325,11 @@ static void rxe_skb_tx_dtor(struct sk_buff *skb)
 {
 	struct sock *sk = skb->sk;
 	struct rxe_qp *qp = sk->sk_user_data;
-	struct rxe_dev *rxe = to_rdev(qp->ibqp.device);
+	int skb_out = atomic_dec_return(&qp->skb_out);
 
-	account_skb(rxe, qp, RXE_REQ_MASK);
+	if (unlikely(qp->need_req_skb &&
+		     skb_out < RXE_INFLIGHT_SKBS_PER_QP_LOW))
+		rxe_run_task(&qp->req.task, 1);
 }
 
 static int send(struct rxe_dev *rxe, struct rxe_pkt_info *pkt,
