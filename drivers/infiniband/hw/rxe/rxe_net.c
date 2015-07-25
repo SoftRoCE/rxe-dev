@@ -52,8 +52,8 @@
  * this allows us to not have to patch that data structure
  * eventually we want to get our own when we're famous
  */
-struct rxe_net_info net_info[RXE_MAX_IF_INDEX];
-spinlock_t net_info_lock; /* spinlock for net_info array */
+struct list_head net_info_list;
+spinlock_t net_info_lock; /* spinlock for net_info list */
 
 struct rxe_addr_info addr_info;
 
@@ -179,10 +179,11 @@ static int rxe_udp_encap_recv(struct sock *sk, struct sk_buff *skb)
 {
 	struct udphdr *udph;
 	struct net_device *ndev = skb->dev;
-	struct rxe_dev *rxe = net_to_rxe(ndev);
+	struct rxe_net_info_list *net_info_item =
+			net_info_list_get(ndev->ifindex, 0);
 	struct rxe_pkt_info *pkt = SKB_TO_PKT(skb);
 
-	if (!rxe)
+	if (!net_info_item || !net_info_item->rxe)
 		goto drop;
 
 	if (skb_linearize(skb)) {
@@ -191,8 +192,8 @@ static int rxe_udp_encap_recv(struct sock *sk, struct sk_buff *skb)
 	}
 
 	udph = udp_hdr(skb);
-	pkt->rxe = rxe;
-	pkt->port_num = net_to_port(ndev);
+	pkt->rxe = net_info_item->rxe;
+	pkt->port_num = net_info_item->port;
 	pkt->hdr = (u8 *)(udph + 1);
 	pkt->mask = RXE_GRH_MASK;
 	pkt->paylen = be16_to_cpu(udph->len) - sizeof(*udph);
@@ -436,11 +437,10 @@ static struct rxe_ifc_ops ifc_ops = {
 };
 
 /* Caller must hold net_info_lock */
-void rxe_net_add(struct net_device *ndev)
+void rxe_net_add(struct rxe_net_info_list *info_item)
 {
 	int err;
 	struct rxe_dev *rxe;
-	unsigned port_num;
 
 	__module_get(THIS_MODULE);
 
@@ -450,23 +450,20 @@ void rxe_net_add(struct net_device *ndev)
 		goto err1;
 	}
 
-	/* for now we always assign port = 1 */
-	port_num = 1;
-
 	rxe->ifc_ops = &ifc_ops;
+	rxe->ndev = info_item->ndev;
 
-	rxe->ndev = ndev;
-
-	err = rxe_add(rxe, ndev->mtu);
+	err = rxe_add(rxe, info_item->ndev->mtu);
 	if (err)
 		goto err2;
 
 	pr_info("rxe: added %s to %s\n",
-		rxe->ib_dev.name, ndev->name);
+		rxe->ib_dev.name, info_item->ndev->name);
 
-	net_info[ndev->ifindex].rxe = rxe;
-	net_info[ndev->ifindex].port = port_num;
-	net_info[ndev->ifindex].ndev = ndev;
+	info_item->rxe = rxe;
+	/* for now we always assign port = 1 */
+	info_item->port = 1;
+
 	return;
 
 err2:
@@ -476,124 +473,95 @@ err1:
 }
 
 /* Caller must hold net_info_lock */
-void rxe_net_up(struct net_device *ndev)
+void rxe_net_up(struct net_device *ndev, struct rxe_net_info_list *info_item)
 {
-	struct rxe_dev *rxe;
 	struct rxe_port *port;
-	u8 port_num;
 
-	if (ndev->ifindex >= RXE_MAX_IF_INDEX)
-		goto out;
+	info_item->status = IB_PORT_ACTIVE;
 
-	net_info[ndev->ifindex].status = IB_PORT_ACTIVE;
+	if (!info_item->rxe)
+		return;
 
-	rxe = net_to_rxe(ndev);
-	if (!rxe)
-		goto out;
-
-	port_num = net_to_port(ndev);
-	port = &rxe->port[port_num-1];
+	port = &info_item->rxe->port[info_item->port-1];
 	port->attr.state = IB_PORT_ACTIVE;
 	port->attr.phys_state = IB_PHYS_STATE_LINK_UP;
 
 	pr_info("rxe: set %s active for %s\n",
-		rxe->ib_dev.name, ndev->name);
-out:
-	return;
+		info_item->rxe->ib_dev.name, ndev->name);
 }
 
 /* Caller must hold net_info_lock */
-void rxe_net_down(struct net_device *ndev)
+void rxe_net_down(struct net_device *ndev, struct rxe_net_info_list *info_item)
 {
-	struct rxe_dev *rxe;
 	struct rxe_port *port;
-	u8 port_num;
 
-	if (ndev->ifindex >= RXE_MAX_IF_INDEX)
-		goto out;
+	info_item->status = IB_PORT_DOWN;
 
-	net_info[ndev->ifindex].status = IB_PORT_DOWN;
+	if (!info_item->rxe)
+		return;
 
-	rxe = net_to_rxe(ndev);
-	if (!rxe)
-		goto out;
-
-	port_num = net_to_port(ndev);
-	port = &rxe->port[port_num-1];
+	port = &info_item->rxe->port[info_item->port-1];
 	port->attr.state = IB_PORT_DOWN;
 	port->attr.phys_state = 3;
 
 	pr_info("rxe: set %s down for %s\n",
-		rxe->ib_dev.name, ndev->name);
-out:
-	return;
+		info_item->rxe->ib_dev.name, ndev->name);
 }
 
 static int can_support_rxe(struct net_device *ndev)
 {
-	int rc = 0;
-
-	if (ndev->ifindex >= RXE_MAX_IF_INDEX) {
-		pr_debug("%s index %d: too large for rxe ndev table\n",
-			 ndev->name, ndev->ifindex);
-		goto out;
-	}
-
 	/* Let's says we support all ethX devices */
-	if (ndev->type == ARPHRD_ETHER)
-		rc = 1;
-
-out:
-	return rc;
+	return (ndev->type == ARPHRD_ETHER);
 }
 
 static int rxe_notify(struct notifier_block *not_blk,
 		      unsigned long event,
 		      void *arg)
 {
-	struct rxe_dev *rxe;
 	struct net_device *ndev = netdev_notifier_info_to_dev(arg);
+	struct rxe_net_info_list *net_info_item;
 
 	if (!can_support_rxe(ndev))
 		goto out;
 
 	spin_lock_bh(&net_info_lock);
+	net_info_item = net_info_list_get(ndev->ifindex, 1);
 	switch (event) {
 	case NETDEV_REGISTER:
 		/* Keep a record of this NIC. */
-		net_info[ndev->ifindex].status = IB_PORT_DOWN;
-		net_info[ndev->ifindex].rxe = NULL;
-		net_info[ndev->ifindex].port = 1;
-		net_info[ndev->ifindex].ndev = ndev;
+		net_info_item->status = IB_PORT_DOWN;
+		net_info_item->rxe = NULL;
+		net_info_item->port = 1;
+		net_info_item->ndev = ndev;
 		break;
 
 	case NETDEV_UNREGISTER:
-		if (net_info[ndev->ifindex].rxe) {
-			rxe = net_info[ndev->ifindex].rxe;
-			net_info[ndev->ifindex].rxe = NULL;
+		if (net_info_item->rxe) {
+			struct rxe_dev *rxe = net_info_item->rxe;
+
+			net_info_item->rxe = NULL;
 			spin_unlock_bh(&net_info_lock);
 			rxe_remove(rxe);
 			spin_lock_bh(&net_info_lock);
 		}
-		net_info[ndev->ifindex].status = 0;
-		net_info[ndev->ifindex].port = 0;
-		net_info[ndev->ifindex].ndev = NULL;
+		list_del(&net_info_item->list);
+		kfree(net_info_item);
 		break;
 
 	case NETDEV_UP:
-		rxe_net_up(ndev);
+		rxe_net_up(ndev, net_info_item);
 		break;
 
 	case NETDEV_DOWN:
-		rxe_net_down(ndev);
+		rxe_net_down(ndev, net_info_item);
 		break;
 
 	case NETDEV_CHANGEMTU:
-		rxe = net_to_rxe(ndev);
-		if (rxe) {
+		if (net_info_item->rxe) {
 			pr_info("rxe: %s changed mtu to %d\n",
 				ndev->name, ndev->mtu);
-			rxe_set_mtu(rxe, ndev->mtu, net_to_port(ndev));
+			rxe_set_mtu(net_info_item->rxe, ndev->mtu,
+				    net_info_item->port);
 		}
 		break;
 
@@ -614,6 +582,45 @@ out:
 	return NOTIFY_OK;
 }
 
+struct rxe_net_info_list *net_info_list_add(int index)
+{
+	struct rxe_net_info_list *net_info_item;
+
+	net_info_item = kzalloc(sizeof(*net_info_item), GFP_KERNEL);
+	if (net_info_item) {
+		net_info_item->ifindex = index;
+		INIT_LIST_HEAD(&net_info_item->list);
+		list_add(&net_info_item->list, &net_info_list);
+	}
+
+	return net_info_item;
+}
+
+struct rxe_net_info_list *net_info_list_get(int index, int add_if_missing)
+{
+	struct rxe_net_info_list *net_info_item;
+
+	if (list_empty(&net_info_list))
+		goto out;
+
+	list_for_each_entry(net_info_item, &net_info_list, list)
+		if (net_info_item->ifindex == index)
+			return net_info_item;
+
+out:
+	return add_if_missing ? net_info_list_add(index) : NULL;
+}
+
+static void net_info_list_release(void)
+{
+	struct rxe_net_info_list *net_info_item, *net_info_temp;
+
+	if (!list_empty(&net_info_list))
+		list_for_each_entry_safe(net_info_item, net_info_temp,
+					 &net_info_list, list)
+			kfree(net_info_item);
+}
+
 static struct notifier_block rxe_net_notifier = {
 	.notifier_call = rxe_notify,
 };
@@ -622,6 +629,7 @@ int rxe_net_init(void)
 {
 	int err;
 
+	INIT_LIST_HEAD(&net_info_list);
 	spin_lock_init(&net_info_lock);
 
 	addr_info.sock4 = rxe_setup_udp_tunnel(&init_net, 0,
@@ -652,6 +660,10 @@ void rxe_net_exit(void)
 		rxe_release_udp_tunnel(addr_info.sock6);
 	if (addr_info.sock4)
 		rxe_release_udp_tunnel(addr_info.sock4);
+
+	spin_lock_bh(&net_info_lock);
+	net_info_list_release();
+	spin_unlock_bh(&net_info_lock);
 
 	unregister_netdevice_notifier(&rxe_net_notifier);
 }

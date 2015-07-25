@@ -54,28 +54,18 @@ static int sanitize_arg(const char *val, char *intf, int intf_len)
 }
 
 /* Caller must hold net_info_lock */
-static void rxe_set_port_state(struct net_device *ndev)
+static void rxe_set_port_state(struct rxe_net_info_list *info_item)
 {
-	struct rxe_dev *rxe;
-
-	if (ndev->ifindex >= RXE_MAX_IF_INDEX)
-		goto out;
-
-	rxe = net_to_rxe(ndev);
-	if (!rxe)
-		goto out;
-
-	if (net_info[ndev->ifindex].status == IB_PORT_ACTIVE)
-		rxe_net_up(ndev);
+	if (info_item->status == IB_PORT_ACTIVE)
+		rxe_net_up(info_item->ndev, info_item);
 	else
-		rxe_net_down(ndev); /* down for unknown state */
-out:
-	return;
+		rxe_net_down(info_item->ndev, info_item); /* down for unknown state */
 }
 
-static int rxe_param_set_add(const char *val, struct kernel_param *kp)
+static int rxe_param_set_add(const char *val, const struct kernel_param *kp)
 {
-	int i, len;
+	int len;
+	struct rxe_net_info_list *info_item;
 	char intf[32];
 
 	len = sanitize_arg(val, intf, sizeof(intf));
@@ -85,26 +75,24 @@ static int rxe_param_set_add(const char *val, struct kernel_param *kp)
 	}
 
 	spin_lock_bh(&net_info_lock);
-	for (i = 0; i < RXE_MAX_IF_INDEX; i++) {
-		struct net_device *ndev = net_info[i].ndev;
-
-		if (ndev && (0 == strncmp(intf, ndev->name, len))) {
+	list_for_each_entry(info_item, &net_info_list, list)
+		if (info_item->ndev && (0 == strncmp(intf,
+					info_item->ndev->name, len))) {
 			spin_unlock_bh(&net_info_lock);
-			if (net_info[i].rxe)
+			if (info_item->rxe)
 				pr_info("rxe: already configured on %s\n",
 					intf);
 			else {
-				rxe_net_add(ndev);
-				if (net_info[i].rxe) {
-					rxe_set_port_state(ndev);
-				} else {
-					pr_err("rxe: add appears to have failed for %s (index %d)\n",
-					       intf, i);
-				}
+				rxe_net_add(info_item);
+				if (info_item->rxe)
+					rxe_set_port_state(info_item);
+				else
+					pr_err("rxe: add appears to have failed"
+					       " for %s (index %d)\n",
+						intf, info_item->ndev->ifindex);
 			}
 			return 0;
 		}
-	}
 	spin_unlock_bh(&net_info_lock);
 
 	pr_warn("interface %s not found\n", intf);
@@ -114,26 +102,26 @@ static int rxe_param_set_add(const char *val, struct kernel_param *kp)
 
 static void rxe_remove_all(void)
 {
-	int i;
 	struct rxe_dev *rxe;
+	struct rxe_net_info_list *info_item;
 
-	for (i = 0; i < RXE_MAX_IF_INDEX; i++) {
-		if (net_info[i].rxe) {
+	list_for_each_entry(info_item, &net_info_list, list)
+		if (info_item->rxe) {
 			spin_lock_bh(&net_info_lock);
-			rxe = net_info[i].rxe;
-			net_info[i].rxe = NULL;
+			rxe = info_item->rxe;
+			info_item->rxe = NULL;
 			spin_unlock_bh(&net_info_lock);
 
 			rxe_remove(rxe);
 		}
-	}
 }
 
-static int rxe_param_set_remove(const char *val, struct kernel_param *kp)
+static int rxe_param_set_remove(const char *val, const struct kernel_param *kp)
 {
-	int i, len;
+	int len;
 	char intf[32];
 	struct rxe_dev *rxe;
+	struct rxe_net_info_list *info_item;
 
 	len = sanitize_arg(val, intf, sizeof(intf));
 	if (!len) {
@@ -148,24 +136,33 @@ static int rxe_param_set_remove(const char *val, struct kernel_param *kp)
 	}
 
 	spin_lock_bh(&net_info_lock);
-	for (i = 0; i < RXE_MAX_IF_INDEX; i++) {
-		if (!net_info[i].rxe || !net_info[i].ndev)
+	list_for_each_entry(info_item, &net_info_list, list)
+		if (!info_item->rxe || !info_item->ndev)
 			continue;
-
-		if (0 == strncmp(intf, net_info[i].rxe->ib_dev.name, len)) {
-			rxe = net_info[i].rxe;
-			net_info[i].rxe = NULL;
+		else if (0 == strncmp(intf, info_item->rxe->ib_dev.name, len)) {
+			rxe = info_item->rxe;
+			info_item->rxe = NULL;
 			spin_unlock_bh(&net_info_lock);
 
 			rxe_remove(rxe);
+
 			return 0;
 		}
-	}
 	spin_unlock_bh(&net_info_lock);
+
 	pr_warn("rxe_sys: instance %s not found\n", intf);
 
 	return 0;
 }
 
-module_param_call(add, rxe_param_set_add, NULL, NULL, 0200);
-module_param_call(remove, rxe_param_set_remove, NULL, NULL, 0200);
+static struct kernel_param_ops param_ops_add = {
+	.set = rxe_param_set_add,
+	.get = NULL,
+};
+module_param_cb(add, &param_ops_add, NULL, 0200);
+
+static struct kernel_param_ops param_ops_remove = {
+	.set = rxe_param_set_remove,
+	.get = NULL,
+};
+module_param_cb(remove, &param_ops_remove, NULL, 0200);
