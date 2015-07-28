@@ -713,12 +713,6 @@ static enum resp_states read_reply(struct rxe_qp *qp,
 	if (!skb)
 		return RESPST_ERR_RNR;
 
-	err = rxe->ifc_ops->prepare(rxe, &ack_pkt, skb);
-	if (err) {
-		kfree_skb(skb);
-		return RESPST_ERROR;
-	}
-
 	err = rxe_mem_copy(res->read.mr, res->read.va, payload_addr(&ack_pkt),
 			   payload, direction_out, NULL);
 	if (err)
