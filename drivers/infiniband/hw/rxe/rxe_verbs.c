@@ -769,7 +769,13 @@ static int rxe_post_send(struct ib_qp *ibqp, struct ib_send_wr *wr,
 		wr = wr->next;
 	}
 
-	must_sched = queue_count(qp->sq.queue) > 1;
+	/*
+	 * Must sched in case of GSI QP because ib_send_mad() hold irq lock,
+	 * and the requester call ip_local_out_sk() that takes spin_lock_bh.
+	 */
+	must_sched = (qp_type(qp) == IB_QPT_GSI) ||
+			(queue_count(qp->sq.queue) > 1);
+
 	rxe_run_task(&qp->req.task, must_sched);
 
 	return err;
