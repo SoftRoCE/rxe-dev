@@ -95,7 +95,7 @@ struct srp_device {
 	struct list_head	dev_list;
 	struct ib_device       *dev;
 	struct ib_pd	       *pd;
-	struct ib_mr	       *mr;
+	struct ib_mr	       *rkey_mr;
 	u64			mr_page_mask;
 	int			mr_page_size;
 	int			mr_max_size;
