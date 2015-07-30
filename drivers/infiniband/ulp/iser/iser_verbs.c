@@ -284,9 +284,7 @@ iser_alloc_pi_ctx(struct ib_device *ib_device, struct ib_pd *pd,
 		  struct fast_reg_descriptor *desc)
 {
 	struct iser_pi_context *pi_ctx = NULL;
-	struct ib_mr_init_attr mr_init_attr = {.max_reg_descriptors = 2,
-					       .flags = IB_MR_SIGNATURE_EN};
-	int ret = 0;
+	int ret;
 
 	desc->pi_ctx = kzalloc(sizeof(*desc->pi_ctx), GFP_KERNEL);
 	if (!desc->pi_ctx)
@@ -301,15 +299,15 @@ iser_alloc_pi_ctx(struct ib_device *ib_device, struct ib_pd *pd,
 		goto prot_frpl_failure;
 	}
 
-	pi_ctx->prot_mr = ib_alloc_fast_reg_mr(pd,
-					ISCSI_ISER_SG_TABLESIZE + 1);
+	pi_ctx->prot_mr = ib_alloc_mr(pd, IB_MR_TYPE_MEM_REG,
+				      ISCSI_ISER_SG_TABLESIZE + 1);
 	if (IS_ERR(pi_ctx->prot_mr)) {
 		ret = PTR_ERR(pi_ctx->prot_mr);
 		goto prot_mr_failure;
 	}
 	desc->reg_indicators |= ISER_PROT_KEY_VALID;
 
-	pi_ctx->sig_mr = ib_create_mr(pd, &mr_init_attr);
+	pi_ctx->sig_mr = ib_alloc_mr(pd, IB_MR_TYPE_SIGNATURE, 2);
 	if (IS_ERR(pi_ctx->sig_mr)) {
 		ret = PTR_ERR(pi_ctx->sig_mr);
 		goto sig_mr_failure;
@@ -334,7 +332,7 @@ iser_free_pi_ctx(struct iser_pi_context *pi_ctx)
 {
 	ib_free_fast_reg_page_list(pi_ctx->prot_frpl);
 	ib_dereg_mr(pi_ctx->prot_mr);
-	ib_destroy_mr(pi_ctx->sig_mr);
+	ib_dereg_mr(pi_ctx->sig_mr);
 	kfree(pi_ctx);
 }
 
@@ -353,7 +351,8 @@ iser_create_fastreg_desc(struct ib_device *ib_device, struct ib_pd *pd,
 		return PTR_ERR(desc->data_frpl);
 	}
 
-	desc->data_mr = ib_alloc_fast_reg_mr(pd, ISCSI_ISER_SG_TABLESIZE + 1);
+	desc->data_mr = ib_alloc_mr(pd, IB_MR_TYPE_MEM_REG,
+				    ISCSI_ISER_SG_TABLESIZE + 1);
 	if (IS_ERR(desc->data_mr)) {
 		ret = PTR_ERR(desc->data_mr);
 		iser_err("Failed to allocate ib_fast_reg_mr err=%d\n", ret);

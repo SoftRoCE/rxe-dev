@@ -557,20 +557,18 @@ __attribute_const__ int ib_rate_to_mult(enum ib_rate rate);
  */
 __attribute_const__ int ib_rate_to_mbps(enum ib_rate rate);
 
-enum ib_mr_create_flags {
-	IB_MR_SIGNATURE_EN = 1,
-};
 
 /**
- * ib_mr_init_attr - Memory region init attributes passed to routine
- *     ib_create_mr.
- * @max_reg_descriptors: max number of registration descriptors that
- *     may be used with registration work requests.
- * @flags: MR creation flags bit mask.
+ * enum ib_mr_type - memory region type
+ * @IB_MR_TYPE_MEM_REG:       memory region that is used for
+ *                            normal registration
+ * @IB_MR_TYPE_SIGNATURE:     memory region that is used for
+ *                            signature operations (data-integrity
+ *                            capable regions)
  */
-struct ib_mr_init_attr {
-	int	    max_reg_descriptors;
-	u32	    flags;
+enum ib_mr_type {
+	IB_MR_TYPE_MEM_REG,
+	IB_MR_TYPE_SIGNATURE,
 };
 
 /**
@@ -1671,11 +1669,9 @@ struct ib_device {
 	int                        (*query_mr)(struct ib_mr *mr,
 					       struct ib_mr_attr *mr_attr);
 	int                        (*dereg_mr)(struct ib_mr *mr);
-	int                        (*destroy_mr)(struct ib_mr *mr);
-	struct ib_mr *		   (*create_mr)(struct ib_pd *pd,
-						struct ib_mr_init_attr *mr_init_attr);
-	struct ib_mr *		   (*alloc_fast_reg_mr)(struct ib_pd *pd,
-					       int max_page_list_len);
+	struct ib_mr *		   (*alloc_mr)(struct ib_pd *pd,
+					       enum ib_mr_type mr_type,
+					       u32 max_num_sg);
 	struct ib_fast_reg_page_list * (*alloc_fast_reg_page_list)(struct ib_device *device,
 								   int page_list_len);
 	void			   (*free_fast_reg_page_list)(struct ib_fast_reg_page_list *page_list);
@@ -2093,34 +2089,6 @@ static inline bool rdma_cap_af_ib(const struct ib_device *device, u8 port_num)
 static inline bool rdma_cap_eth_ah(const struct ib_device *device, u8 port_num)
 {
 	return device->port_immutable[port_num].core_cap_flags & RDMA_CORE_CAP_ETH_AH;
-}
-
-/**
- * rdma_cap_read_multi_sge - Check if the port of device has the capability
- * RDMA Read Multiple Scatter-Gather Entries.
- * @device: Device to check
- * @port_num: Port number to check
- *
- * iWARP has a restriction that RDMA READ requests may only have a single
- * Scatter/Gather Entry (SGE) in the work request.
- *
- * NOTE: although the linux kernel currently assumes all devices are either
- * single SGE RDMA READ devices or identical SGE maximums for RDMA READs and
- * WRITEs, according to Tom Talpey, this is not accurate.  There are some
- * devices out there that support more than a single SGE on RDMA READ
- * requests, but do not support the same number of SGEs as they do on
- * RDMA WRITE requests.  The linux kernel would need rearchitecting to
- * support these imbalanced READ/WRITE SGEs allowed devices.  So, for now,
- * suffice with either the device supports the same READ/WRITE SGEs, or
- * it only gets one READ sge.
- *
- * Return: true for any device that allows more than one SGE in RDMA READ
- * requests.
- */
-static inline bool rdma_cap_read_multi_sge(struct ib_device *device,
-					   u8 port_num)
-{
-	return !(device->port_immutable[port_num].core_cap_flags & RDMA_CORE_CAP_PROT_IWARP);
 }
 
 /**
@@ -2846,33 +2814,9 @@ int ib_query_mr(struct ib_mr *mr, struct ib_mr_attr *mr_attr);
  */
 int ib_dereg_mr(struct ib_mr *mr);
 
-
-/**
- * ib_create_mr - Allocates a memory region that may be used for
- *     signature handover operations.
- * @pd: The protection domain associated with the region.
- * @mr_init_attr: memory region init attributes.
- */
-struct ib_mr *ib_create_mr(struct ib_pd *pd,
-			   struct ib_mr_init_attr *mr_init_attr);
-
-/**
- * ib_destroy_mr - Destroys a memory region that was created using
- *     ib_create_mr and removes it from HW translation tables.
- * @mr: The memory region to destroy.
- *
- * This function can fail, if the memory region has memory windows bound to it.
- */
-int ib_destroy_mr(struct ib_mr *mr);
-
-/**
- * ib_alloc_fast_reg_mr - Allocates memory region usable with the
- *   IB_WR_FAST_REG_MR send work request.
- * @pd: The protection domain associated with the region.
- * @max_page_list_len: requested max physical buffer list length to be
- *   used with fast register work requests for this MR.
- */
-struct ib_mr *ib_alloc_fast_reg_mr(struct ib_pd *pd, int max_page_list_len);
+struct ib_mr *ib_alloc_mr(struct ib_pd *pd,
+			  enum ib_mr_type mr_type,
+			  u32 max_num_sg);
 
 /**
  * ib_alloc_fast_reg_page_list - Allocates a page list array

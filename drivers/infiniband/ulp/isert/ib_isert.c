@@ -491,7 +491,7 @@ isert_conn_free_fastreg_pool(struct isert_conn *isert_conn)
 		if (fr_desc->pi_ctx) {
 			ib_free_fast_reg_page_list(fr_desc->pi_ctx->prot_frpl);
 			ib_dereg_mr(fr_desc->pi_ctx->prot_mr);
-			ib_destroy_mr(fr_desc->pi_ctx->sig_mr);
+			ib_dereg_mr(fr_desc->pi_ctx->sig_mr);
 			kfree(fr_desc->pi_ctx);
 		}
 		kfree(fr_desc);
@@ -508,7 +508,6 @@ isert_create_pi_ctx(struct fast_reg_descriptor *desc,
 		    struct ib_device *device,
 		    struct ib_pd *pd)
 {
-	struct ib_mr_init_attr mr_init_attr;
 	struct pi_context *pi_ctx;
 	int ret;
 
@@ -527,7 +526,8 @@ isert_create_pi_ctx(struct fast_reg_descriptor *desc,
 		goto err_pi_ctx;
 	}
 
-	pi_ctx->prot_mr = ib_alloc_fast_reg_mr(pd, ISCSI_ISER_SG_TABLESIZE);
+	pi_ctx->prot_mr = ib_alloc_mr(pd, IB_MR_TYPE_MEM_REG,
+				      ISCSI_ISER_SG_TABLESIZE);
 	if (IS_ERR(pi_ctx->prot_mr)) {
 		isert_err("Failed to allocate prot frmr err=%ld\n",
 			  PTR_ERR(pi_ctx->prot_mr));
@@ -536,10 +536,7 @@ isert_create_pi_ctx(struct fast_reg_descriptor *desc,
 	}
 	desc->ind |= ISERT_PROT_KEY_VALID;
 
-	memset(&mr_init_attr, 0, sizeof(mr_init_attr));
-	mr_init_attr.max_reg_descriptors = 2;
-	mr_init_attr.flags |= IB_MR_SIGNATURE_EN;
-	pi_ctx->sig_mr = ib_create_mr(pd, &mr_init_attr);
+	pi_ctx->sig_mr = ib_alloc_mr(pd, IB_MR_TYPE_SIGNATURE, 2);
 	if (IS_ERR(pi_ctx->sig_mr)) {
 		isert_err("Failed to allocate signature enabled mr err=%ld\n",
 			  PTR_ERR(pi_ctx->sig_mr));
@@ -577,7 +574,8 @@ isert_create_fr_desc(struct ib_device *ib_device, struct ib_pd *pd,
 		return PTR_ERR(fr_desc->data_frpl);
 	}
 
-	fr_desc->data_mr = ib_alloc_fast_reg_mr(pd, ISCSI_ISER_SG_TABLESIZE);
+	fr_desc->data_mr = ib_alloc_mr(pd, IB_MR_TYPE_MEM_REG,
+				       ISCSI_ISER_SG_TABLESIZE);
 	if (IS_ERR(fr_desc->data_mr)) {
 		isert_err("Failed to allocate data frmr err=%ld\n",
 			  PTR_ERR(fr_desc->data_mr));
