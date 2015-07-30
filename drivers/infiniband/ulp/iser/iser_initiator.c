@@ -173,8 +173,8 @@ static void iser_create_send_desc(struct iser_conn	*iser_conn,
 
 	tx_desc->num_sge = 1;
 
-	if (tx_desc->tx_sg[0].lkey != device->mr->lkey) {
-		tx_desc->tx_sg[0].lkey = device->mr->lkey;
+	if (tx_desc->tx_sg[0].lkey != device->pd->local_dma_lkey) {
+		tx_desc->tx_sg[0].lkey = device->pd->local_dma_lkey;
 		iser_dbg("sdesc %p lkey mismatch, fixing\n", tx_desc);
 	}
 }
@@ -291,7 +291,7 @@ int iser_alloc_rx_descriptors(struct iser_conn *iser_conn,
 		rx_sg = &rx_desc->rx_sg;
 		rx_sg->addr   = rx_desc->dma_addr;
 		rx_sg->length = ISER_RX_PAYLOAD_SIZE;
-		rx_sg->lkey   = device->mr->lkey;
+		rx_sg->lkey   = device->pd->local_dma_lkey;
 	}
 
 	iser_conn->rx_desc_head = 0;
@@ -543,7 +543,7 @@ int iser_send_control(struct iscsi_conn *conn,
 
 		tx_dsg->addr    = iser_conn->login_req_dma;
 		tx_dsg->length  = task->data_count;
-		tx_dsg->lkey    = device->mr->lkey;
+		tx_dsg->lkey    = device->pd->local_dma_lkey;
 		mdesc->num_sge = 2;
 	}
 
