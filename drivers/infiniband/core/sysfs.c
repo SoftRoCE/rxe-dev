@@ -461,6 +461,7 @@ static void ib_device_release(struct device *device)
 {
 	struct ib_device *dev = container_of(device, struct ib_device, dev);
 
+	ib_cache_cleanup_one(dev);
 	kfree(dev->port_immutable);
 	kfree(dev);
 }
