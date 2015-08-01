@@ -116,4 +116,6 @@ source "drivers/staging/amso1100/Kconfig"
 
 source "drivers/staging/ipath/Kconfig"
 
+source "drivers/staging/hfi1/Kconfig"
+
 endif # STAGING

@@ -50,3 +50,4 @@ obj-$(CONFIG_FSL_MC_BUS)	+= fsl-mc/
 obj-$(CONFIG_WILC1000)		+= wilc1000/
 obj-$(CONFIG_INFINIBAND_AMSO1100)	+= amso1100/
 obj-$(CONFIG_INFINIBAND_IPATH)	+= ipath/
+obj-$(CONFIG_INFINIBAND_HFI1)	+= hfi1/
