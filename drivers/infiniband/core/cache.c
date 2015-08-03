@@ -121,15 +121,16 @@ static int write_gid(struct ib_device *ib_dev, u8 port,
 {
 	int ret = 0;
 	struct net_device *old_net_dev;
+	unsigned long flags;
 
 	/* in rdma_cap_roce_gid_table, this funciton should be protected by a
 	 * sleep-able lock.
 	 */
-	write_lock(&table->data_vec[ix].lock);
+	write_lock_irqsave(&table->data_vec[ix].lock, flags);
 
 	if (rdma_cap_roce_gid_table(ib_dev, port)) {
 		table->data_vec[ix].props |= GID_TABLE_ENTRY_INVALID;
-		write_unlock(&table->data_vec[ix].lock);
+		write_unlock_irqrestore(&table->data_vec[ix].lock, flags);
 		/* GID_TABLE_WRITE_ACTION_MODIFY currently isn't supported by
 		 * RoCE providers and thus only updates the cache.
 		 */
@@ -139,7 +140,7 @@ static int write_gid(struct ib_device *ib_dev, u8 port,
 		else if (action == GID_TABLE_WRITE_ACTION_DEL)
 			ret = ib_dev->del_gid(ib_dev, port, ix,
 					      &table->data_vec[ix].context);
-		write_lock(&table->data_vec[ix].lock);
+		write_lock_irqsave(&table->data_vec[ix].lock, flags);
 	}
 
 	old_net_dev = table->data_vec[ix].attr.ndev;
@@ -161,7 +162,7 @@ static int write_gid(struct ib_device *ib_dev, u8 port,
 
 	table->data_vec[ix].props &= ~GID_TABLE_ENTRY_INVALID;
 
-	write_unlock(&table->data_vec[ix].lock);
+	write_unlock_irqrestore(&table->data_vec[ix].lock, flags);
 
 	if (!ret && rdma_cap_roce_gid_table(ib_dev, port)) {
 		struct ib_event event;
