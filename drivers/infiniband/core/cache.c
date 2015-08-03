@@ -582,8 +582,9 @@ static int _gid_table_setup_one(struct ib_device *ib_dev)
 	return 0;
 
 rollback_table_setup:
-	for (port = 1; port <= ib_dev->phys_port_cnt; port++)
-		free_gid_table(ib_dev, port, table[port]);
+	for (port = 0; port < ib_dev->phys_port_cnt; port++)
+		free_gid_table(ib_dev, port + rdma_start_port(ib_dev),
+			       table[port]);
 
 	kfree(table);
 	return err;
