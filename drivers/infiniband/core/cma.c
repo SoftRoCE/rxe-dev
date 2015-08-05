@@ -427,9 +427,9 @@ static int cma_translate_addr(struct sockaddr *addr, struct rdma_dev_addr *dev_a
 }
 
 static inline int cma_validate_port(struct ib_device *device, u8 port,
-				      union ib_gid *gid, int dev_type)
+				      union ib_gid *gid, int dev_type,
+				      int bound_if_index)
 {
-	u8 found_port;
 	int ret = -ENODEV;
 
 	if ((dev_type == ARPHRD_INFINIBAND) && !rdma_protocol_ib(device, port))
@@ -438,9 +438,21 @@ static inline int cma_validate_port(struct ib_device *device, u8 port,
 	if ((dev_type != ARPHRD_INFINIBAND) && rdma_protocol_ib(device, port))
 		return ret;
 
-	ret = ib_find_cached_gid(device, gid, NULL, &found_port, NULL);
-	if (port != found_port)
-		return -ENODEV;
+	if (dev_type == ARPHRD_ETHER) {
+		struct net_device *ndev = dev_get_by_index(
+			&init_net, bound_if_index);
+
+		ret = ib_find_cached_gid_by_port(device,
+						 gid,
+						 port,
+						 ndev,
+						 NULL);
+			if (ndev)
+				dev_put(ndev);
+	} else {
+		ret = ib_find_cached_gid_by_port(device, gid,
+						 port, NULL, NULL);
+	}
 
 	return ret;
 }
@@ -472,7 +484,8 @@ static int cma_acquire_dev(struct rdma_id_private *id_priv,
 		       &iboe_gid : &gid;
 
 		ret = cma_validate_port(cma_dev->device, port, gidp,
-					dev_addr->dev_type);
+					dev_addr->dev_type,
+					id_priv->id.route.addr.dev_addr.bound_dev_if);
 		if (!ret) {
 			id_priv->id.port_num = port;
 			goto out;
@@ -490,7 +503,8 @@ static int cma_acquire_dev(struct rdma_id_private *id_priv,
 			       &iboe_gid : &gid;
 
 			ret = cma_validate_port(cma_dev->device, port, gidp,
-						dev_addr->dev_type);
+						dev_addr->dev_type,
+						id_priv->id.route.addr.dev_addr.bound_dev_if);
 			if (!ret) {
 				id_priv->id.port_num = port;
 				goto out;
@@ -2266,8 +2280,11 @@ static int cma_resolve_iboe_route(struct rdma_id_private *id_priv)
 
 	route->num_paths = 1;
 
-	if (addr->dev_addr.bound_dev_if)
+	if (addr->dev_addr.bound_dev_if) {
 		ndev = dev_get_by_index(&init_net, addr->dev_addr.bound_dev_if);
+		route->path_rec->net = &init_net;
+		route->path_rec->ifindex = addr->dev_addr.bound_dev_if;
+	}
 	if (!ndev) {
 		ret = -ENODEV;
 		goto err2;
