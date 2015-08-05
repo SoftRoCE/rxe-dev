@@ -646,6 +646,17 @@ int ib_find_cached_gid(struct ib_device *device,
 }
 EXPORT_SYMBOL(ib_find_cached_gid);
 
+int ib_find_cached_gid_by_port(struct ib_device *device,
+			       const union ib_gid *gid,
+			       u8               port_num,
+			       struct net_device *ndev,
+			       u16              *index)
+{
+	return ib_cache_gid_find_by_port(device, gid, port_num,
+					 ndev, index);
+}
+EXPORT_SYMBOL(ib_find_cached_gid_by_port);
+
 int ib_get_cached_pkey(struct ib_device *device,
 		       u8                port_num,
 		       int               index,
