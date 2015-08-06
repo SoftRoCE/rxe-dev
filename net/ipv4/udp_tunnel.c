@@ -19,6 +19,15 @@ int udp_sock_create4(struct net *net, struct udp_port_cfg *cfg,
 	if (err < 0)
 		goto error;
 
+	if (cfg->reuse_port) {
+		int opt = 1;
+
+		err = kernel_setsockopt(sock, SOL_SOCKET, SO_REUSEPORT,
+					(char *)&opt, sizeof(opt));
+		if (err < 0)
+			goto error;
+	}
+
 	udp_addr.sin_family = AF_INET;
 	udp_addr.sin_addr = cfg->local_ip;
 	udp_addr.sin_port = cfg->local_udp_port;
