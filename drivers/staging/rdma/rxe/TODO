@@ -1,0 +1,18 @@
+Aug, 2015
+
+- Remove software processing of IB protocol and place in library for use
+  by qib, ipath (if still present), hfi1, and soft-roce
+- Do not use tasklet in completion flow
+- Need to free resources if user space didn't.
+- Share structures from ib_user_verbs.h instead of copying in ib_rxe.h
+- Move IBA header types and methods from rxe_hdr.h into IB core
+- Cleanup members of rxe_pkt_info that already exists in packet header
+- Refactor post_send_one function to get better performance.
+- Refactor rxe_mem struct to be clear what is type of memory that it's holding.
+- Use single reference count from the pool to the device, instead of having a single
+  reference on the device kept by each element in the pool.
+- Calculate ICRC for incoming packets.
+- Use hash table to hold net_info instead of fixed size array used now.
+
+Sep, 2015
+- Support work request interface memory registration.
