@@ -77,6 +77,8 @@ enum ib_gid_type {
 	IB_GID_TYPE_SIZE
 };
 
+#define ROCE_V2_UDP_DPORT      4791
+
 struct ib_gid_attr {
 	enum ib_gid_type	gid_type;
 	struct net_device	*ndev;
