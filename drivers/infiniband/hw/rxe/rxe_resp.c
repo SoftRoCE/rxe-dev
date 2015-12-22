@@ -598,6 +598,7 @@ static struct sk_buff *prepare_ack_packet(struct rxe_qp *qp,
 	int paylen;
 	int pad;
 	int err;
+	static const uint8_t zerobuf[4] = {0,};
 
 	/*
 	 * allocate packet
@@ -642,6 +643,12 @@ static struct sk_buff *prepare_ack_packet(struct rxe_qp *qp,
 
 	crc = rxe_icrc_hdr(ack, skb);
 	p = payload_addr(ack) + payload;
+	if (pad) {
+		crc = crc32_le(crc, zerobuf, pad);
+		memcpy(p, zerobuf, pad);
+		p = (void*)p + pad;
+	}
+
 	*p = ~crc;
 
 	return skb;

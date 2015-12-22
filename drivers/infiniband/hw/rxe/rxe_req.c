@@ -477,6 +477,8 @@ static int fill_packet(struct rxe_qp *qp, struct rxe_send_wqe *wqe,
 	u32 crc = 0;
 	u32 *p;
 	int err;
+	static const uint8_t zerobuf[4] = {0,};
+	int pad;
 
 	err = rxe->ifc_ops->prepare(rxe, pkt, skb);
 	if (err)
@@ -504,6 +506,12 @@ static int fill_packet(struct rxe_qp *qp, struct rxe_send_wqe *wqe,
 		}
 	}
 	p = payload_addr(pkt) + payload;
+	pad = (-payload) & 0x3;
+	if (pad) {
+		crc = crc32_le(crc, zerobuf, pad);
+		memcpy(p, zerobuf, pad);
+		p = (void*)p + pad;
+	}
 
 	*p = ~crc;
 
