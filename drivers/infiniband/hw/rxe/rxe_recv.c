@@ -187,7 +187,7 @@ static int hdr_check(struct rxe_pkt_info *pkt)
 			((qpn == 1) ? port->qp_gsi_index : qpn);
 		qp = rxe_pool_get_index(&rxe->qp_pool, index);
 		if (unlikely(!qp)) {
-			pr_warn("no qp matches qpn 0x%x\n", qpn);
+			pr_debug("no qp matches qpn 0x%x\n", qpn);
 			goto err1;
 		}
 
