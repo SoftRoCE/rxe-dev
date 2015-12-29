@@ -591,10 +591,6 @@ next_wqe:
 	if (unlikely(!wqe))
 		goto exit;
 
-	/* RC only, PSN window to prevent mixing new packets PSN
-	 * with old ones. According to IB SPEC this number is
-	 * half of the PSN range (2^24).
-	 */
 	if (unlikely(qp_type(qp) == IB_QPT_RC &&
 		     qp->req.psn > (qp->comp.psn + RXE_MAX_UNACKED_PSNS))) {
 		qp->req.wait_psn = 1;

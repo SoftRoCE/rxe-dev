@@ -169,11 +169,7 @@ enum rxe_device_param {
 	RXE_MAX_MW_INDEX		= 0x00060000,
 	RXE_MAX_PKT_PER_ACK		= 64,
 
-	/* PSN window in RC, to prevent mixing new packets PSN with
-	 * old ones. According to IB SPEC this number is half of
-	 * the PSN range (2^24).
-	 */
-	RXE_MAX_UNACKED_PSNS		= 0x800000,
+	RXE_MAX_UNACKED_PSNS		= 128,
 
 	/* Max inflight SKBs per queue pair */
 	RXE_INFLIGHT_SKBS_PER_QP_HIGH	= 64,
