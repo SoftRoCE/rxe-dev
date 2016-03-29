@@ -336,6 +336,8 @@ int rxe_rcv(struct sk_buff *skb)
 	int err;
 	struct rxe_pkt_info *pkt = SKB_TO_PKT(skb);
 	struct rxe_dev *rxe = pkt->rxe;
+	u32 *icrcp;
+	u32 calc_icrc, pack_icrc;
 
 	pkt->offset = 0;
 
@@ -353,6 +355,27 @@ int rxe_rcv(struct sk_buff *skb)
 	err = hdr_check(pkt);
 	if (unlikely(err))
 		goto drop;
+
+	/* Verify ICRC */
+	icrcp = (u32 *)(pkt->hdr + pkt->paylen - RXE_ICRC_SIZE);
+	pack_icrc = be32_to_cpu(*icrcp);
+
+	calc_icrc = rxe_icrc_hdr(pkt, skb);
+	calc_icrc = crc32_le(calc_icrc, (u8 *)payload_addr(pkt), payload_size(pkt));
+	calc_icrc = cpu_to_be32(~calc_icrc);
+	if (unlikely(calc_icrc != pack_icrc)) {
+		char saddr[sizeof(struct in6_addr)];
+
+		if (skb->protocol == htons(ETH_P_IPV6))
+			sprintf(saddr, "%pI6", &ipv6_hdr(skb)->saddr);
+		else if (skb->protocol == htons(ETH_P_IP))
+			sprintf(saddr, "%pI4", &ip_hdr(skb)->saddr);
+		else
+			sprintf(saddr, "unknown");
+
+		pr_warn_ratelimited("bad ICRC from %s\n", saddr);
+		goto drop;
+	}
 
 	if (unlikely(bth_qpn(pkt) == IB_MULTICAST_QPN))
 		rxe_rcv_mcast_pkt(rxe, skb);
