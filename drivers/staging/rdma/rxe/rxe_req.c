@@ -502,7 +502,7 @@ static int fill_packet(struct rxe_qp *qp, struct rxe_send_wqe *wqe,
 				return err;
 		}
 	}
-	p = payload_addr(pkt) + payload;
+	p = payload_addr(pkt) + payload + bth_pad(pkt);
 
 	*p = ~crc;
 
