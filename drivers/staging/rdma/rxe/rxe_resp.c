@@ -948,6 +948,15 @@ static int send_atomic_ack(struct rxe_qp *qp, struct rxe_pkt_info *pkt,
 		goto out;
 	}
 
+	skb_copy = skb_clone(skb, GFP_ATOMIC);
+	if (skb_copy)
+		rxe_add_ref(qp); /* for the new SKB */
+	else {
+		pr_warn("Could not clone atomic response\n");
+		rc = -ENOMEM;
+		goto out;
+	}
+
 	res = &qp->resp.resources[qp->resp.res_head];
 	free_rd_atomic_resource(qp, res);
 	rxe_advance_resp_resource(qp);
@@ -957,12 +966,6 @@ static int send_atomic_ack(struct rxe_qp *qp, struct rxe_pkt_info *pkt,
 	res->first_psn = qp->resp.psn;
 	res->last_psn = qp->resp.psn;
 	res->cur_psn = qp->resp.psn;
-
-	skb_copy = skb_clone(skb, GFP_ATOMIC);
-	if (skb_copy)
-		rxe_add_ref(qp); /* for the new SKB */
-	else
-		pr_warn("Could not clone atomic response\n");
 
 	rc = rxe_xmit_packet(rxe, qp, &ack_pkt, skb_copy);
 	if (rc) {
