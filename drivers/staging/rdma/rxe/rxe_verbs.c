@@ -77,8 +77,7 @@ static int rxe_query_port(struct ib_device *dev,
 {
 	struct rxe_dev *rxe = to_rdev(dev);
 	struct rxe_port *port;
-	struct ethtool_link_ksettings ks;
-
+	u32 speed;
 
 	if (unlikely(port_num < 1 || port_num > rxe->num_ports)) {
 		pr_warn("invalid port_number %d\n", port_num);
@@ -90,9 +89,21 @@ static int rxe_query_port(struct ib_device *dev,
 	*attr = port->attr;
 
 	mutex_lock(&rxe->usdev_lock);
-	rxe->ndev->ethtool_ops->get_link_ksettings(rxe->ndev, &ks);
-	rxe_eth_speed_to_ib_speed(ks.base.speed, &attr->active_speed,
-				  &attr->active_width);
+	if (rxe->ndev->ethtool_ops->get_link_ksettings) {
+		struct ethtool_link_ksettings ks;
+
+		rxe->ndev->ethtool_ops->get_link_ksettings(rxe->ndev, &ks);
+		speed = ks.base.speed;
+	} else if (rxe->ndev->ethtool_ops->get_settings) {
+		struct ethtool_cmd cmd;
+
+		rxe->ndev->ethtool_ops->get_settings(rxe->ndev, &cmd);
+		speed = cmd.speed;
+	} else {
+		pr_warn("%s speed is unknown, defaulting to 1000\n", rxe->ndev->name);
+		speed = 1000;
+	}
+	rxe_eth_speed_to_ib_speed(speed, &attr->active_speed, &attr->active_width);
 	mutex_unlock(&rxe->usdev_lock);
 
 	return 0;
