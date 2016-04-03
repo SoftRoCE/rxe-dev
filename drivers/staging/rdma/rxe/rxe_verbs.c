@@ -1091,7 +1091,8 @@ err1:
 	return ERR_PTR(err);
 }
 
-static struct ib_mw *rxe_alloc_mw(struct ib_pd *ibpd, enum ib_mw_type type)
+static struct ib_mw *rxe_alloc_mw(struct ib_pd *ibpd, enum ib_mw_type type,
+				  struct ib_udata  *udata)
 {
 	struct rxe_dev *rxe = to_rdev(ibpd->device);
 	struct rxe_pd *pd = to_rpd(ibpd);
