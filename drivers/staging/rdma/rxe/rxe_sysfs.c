@@ -109,23 +109,6 @@ static int rxe_param_set_add(const char *val, struct kernel_param *kp)
 	return 0;
 }
 
-static void rxe_remove_all(void)
-{
-	int i;
-	struct rxe_dev *rxe;
-
-	for (i = 0; i < RXE_MAX_IF_INDEX; i++) {
-		if (net_info[i].rxe) {
-			spin_lock_bh(&net_info_lock);
-			rxe = net_info[i].rxe;
-			net_info[i].rxe = NULL;
-			spin_unlock_bh(&net_info_lock);
-
-			rxe_remove(rxe);
-		}
-	}
-}
-
 static int rxe_param_set_remove(const char *val, struct kernel_param *kp)
 {
 	int i, len;

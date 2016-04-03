@@ -402,6 +402,24 @@ void rxe_remove(struct rxe_dev *rxe)
 }
 EXPORT_SYMBOL(rxe_remove);
 
+void rxe_remove_all(void)
+{
+	int i;
+	struct rxe_dev *rxe;
+
+	for (i = 0; i < RXE_MAX_IF_INDEX; i++) {
+		if (net_info[i].rxe) {
+			spin_lock_bh(&net_info_lock);
+			rxe = net_info[i].rxe;
+			net_info[i].rxe = NULL;
+			spin_unlock_bh(&net_info_lock);
+
+			rxe_remove(rxe);
+		}
+	}
+}
+EXPORT_SYMBOL(rxe_remove_all);
+
 static int __init rxe_module_init(void)
 {
 	int err;
@@ -426,6 +444,7 @@ static int __init rxe_module_init(void)
 
 static void __exit rxe_module_exit(void)
 {
+	rxe_remove_all();
 	rxe_net_exit();
 	rxe_cache_exit();
 
