@@ -585,7 +585,8 @@ static struct sk_buff *prepare_ack_packet(struct rxe_qp *qp,
 					  int opcode,
 					  int payload,
 					  u32 psn,
-					  u8 syndrome)
+					  u8 syndrome,
+					  u32 *crcp)
 {
 	struct rxe_dev *rxe = to_rdev(qp->ibqp.device);
 	struct sk_buff *skb;
@@ -636,8 +637,13 @@ static struct sk_buff *prepare_ack_packet(struct rxe_qp *qp,
 		return NULL;
 	}
 
-	p = payload_addr(ack) + payload;
-	*p = ~crc;
+	if (crcp) {
+		/* CRC computation will be continued by the caller */
+		*crcp = crc;
+	} else {
+		p = payload_addr(ack) + payload + bth_pad(ack);
+		*p = ~crc;
+	}
 
 	return skb;
 }
@@ -657,6 +663,8 @@ static enum resp_states read_reply(struct rxe_qp *qp,
 	int opcode;
 	int err;
 	struct resp_res *res = qp->resp.res;
+	u32 icrc;
+	u32 *p;
 
 	if (!res) {
 		/* This is the first time we process that request. Get a
@@ -707,14 +715,17 @@ static enum resp_states read_reply(struct rxe_qp *qp,
 	payload = min_t(int, res->read.resid, mtu);
 
 	skb = prepare_ack_packet(qp, req_pkt, &ack_pkt, opcode, payload,
-				 res->cur_psn, AETH_ACK_UNLIMITED);
+				 res->cur_psn, AETH_ACK_UNLIMITED, &icrc);
 	if (!skb)
 		return RESPST_ERR_RNR;
 
 	err = rxe_mem_copy(res->read.mr, res->read.va, payload_addr(&ack_pkt),
-			   payload, from_mem_obj, NULL);
+			   payload, from_mem_obj, &icrc);
 	if (err)
 		pr_err("Failed copying memory\n");
+
+	p = payload_addr(&ack_pkt) + payload + bth_pad(&ack_pkt);
+	*p = ~icrc;
 
 	err = rxe_xmit_packet(rxe, qp, &ack_pkt, skb);
 	if (err) {
@@ -914,7 +925,7 @@ static int send_ack(struct rxe_qp *qp, struct rxe_pkt_info *pkt,
 	struct rxe_dev *rxe = to_rdev(qp->ibqp.device);
 
 	skb = prepare_ack_packet(qp, pkt, &ack_pkt, IB_OPCODE_RC_ACKNOWLEDGE,
-				 0, psn, syndrome);
+				 0, psn, syndrome, NULL);
 	if (!skb) {
 		err = -ENOMEM;
 		goto err1;
@@ -942,7 +953,7 @@ static int send_atomic_ack(struct rxe_qp *qp, struct rxe_pkt_info *pkt,
 
 	skb = prepare_ack_packet(qp, pkt, &ack_pkt,
 				 IB_OPCODE_RC_ATOMIC_ACKNOWLEDGE, 0, pkt->psn,
-				 syndrome);
+				 syndrome, NULL);
 	if (!skb) {
 		rc = -ENOMEM;
 		goto out;
