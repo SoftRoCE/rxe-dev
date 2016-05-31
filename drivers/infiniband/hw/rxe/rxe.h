@@ -55,6 +55,7 @@
 #define RXE_UVERBS_ABI_VERSION		(1)
 
 #define IB_PHYS_STATE_LINK_UP		(5)
+#define IB_PHYS_STATE_LINK_DOWN		(3)
 
 #define RXE_ROCE_V2_SPORT		(0xc000)
 
@@ -64,7 +65,10 @@ int rxe_set_mtu(struct rxe_dev *rxe, unsigned int dev_mtu,
 int rxe_add(struct rxe_dev *rxe, unsigned int mtu);
 
 void rxe_remove(struct rxe_dev *rxe);
+void rxe_remove_all(void);
 
 int rxe_rcv(struct sk_buff *skb);
+
+void rxe_dev_put(struct rxe_dev *rxe);
 
 #endif /* RXE_H */
