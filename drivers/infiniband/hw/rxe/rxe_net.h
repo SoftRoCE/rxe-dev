@@ -31,47 +31,23 @@
  * SOFTWARE.
  */
 
-#ifndef RXE_H
-#define RXE_H
+#ifndef RXE_NET_H
+#define RXE_NET_H
 
+#include <net/sock.h>
+#include <net/if_inet6.h>
 #include <linux/module.h>
-#include <linux/skbuff.h>
-#include <linux/crc32.h>
 
-#include <rdma/ib_verbs.h>
-#include <rdma/ib_user_verbs.h>
-#include <rdma/ib_pack.h>
-#include <rdma/ib_smi.h>
-#include <rdma/ib_umem.h>
-#include <rdma/ib_cache.h>
-#include <rdma/ib_addr.h>
+struct rxe_recv_sockets {
+	struct socket *sk4;
+	struct socket *sk6;
+};
 
-#include "rxe_net.h"
-#include "rxe_opcode.h"
-#include "rxe_hdr.h"
-#include "rxe_param.h"
-#include "rxe_verbs.h"
+extern struct rxe_recv_sockets recv_sockets;
 
-#define RXE_UVERBS_ABI_VERSION		(1)
+struct rxe_dev *rxe_net_add(struct net_device *ndev);
 
-#define IB_PHYS_STATE_LINK_UP		(5)
-#define IB_PHYS_STATE_LINK_DOWN		(3)
+int rxe_net_init(void);
+void rxe_net_exit(void);
 
-#define RXE_ROCE_V2_SPORT		(0xc000)
-
-int rxe_set_mtu(struct rxe_dev *rxe, unsigned int dev_mtu);
-
-int rxe_add(struct rxe_dev *rxe, unsigned int mtu);
-void rxe_remove(struct rxe_dev *rxe);
-void rxe_remove_all(void);
-
-int rxe_rcv(struct sk_buff *skb);
-
-void rxe_dev_put(struct rxe_dev *rxe);
-struct rxe_dev *net_to_rxe(struct net_device *ndev);
-struct rxe_dev *get_rxe_by_name(const char* name);
-
-void rxe_port_up(struct rxe_dev *rxe);
-void rxe_port_down(struct rxe_dev *rxe);
-
-#endif /* RXE_H */
+#endif /* RXE_NET_H */
