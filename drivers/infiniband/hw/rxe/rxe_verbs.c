@@ -692,6 +692,14 @@ static void init_send_wr(struct rxe_qp *qp, struct rxe_send_wr *wr,
 			wr->wr.atomic.swap = atomic_wr(ibwr)->swap;
 			wr->wr.atomic.rkey = atomic_wr(ibwr)->rkey;
 			break;
+		case IB_WR_LOCAL_INV:
+			wr->ex.invalidate_rkey = ibwr->ex.invalidate_rkey;
+		break;
+		case IB_WR_REG_MR:
+			wr->wr.reg.mr = reg_wr(ibwr)->mr;
+			wr->wr.reg.key = reg_wr(ibwr)->key;
+			wr->wr.reg.access = reg_wr(ibwr)->access;
+		break;
 		default:
 			break;
 		}
@@ -729,6 +737,10 @@ static int init_send_wqe(struct rxe_qp *qp, struct ib_send_wr *ibwr,
 
 			p += sge->length;
 		}
+	} else if (mask & WR_REG_MASK) {
+		wqe->mask = mask;
+		wqe->state = wqe_state_posted;
+		return 0;
 	} else
 		memcpy(wqe->dma.sge, ibwr->sg_list,
 		       num_sge * sizeof(struct ib_sge));
@@ -1102,6 +1114,45 @@ err1:
 	return ERR_PTR(err);
 }
 
+static int rxe_set_page(struct ib_mr *ibmr, u64 addr)
+{
+	struct rxe_mem *mr = to_rmr(ibmr);
+	struct rxe_map *map;
+	struct rxe_phys_buf *buf;
+
+	if (unlikely(mr->nbuf == mr->num_buf))
+		return -ENOMEM;
+
+	map = mr->map[mr->nbuf / RXE_BUF_PER_MAP];
+	buf = &map->buf[mr->nbuf % RXE_BUF_PER_MAP];
+
+	buf->addr = addr;
+	buf->size = ibmr->page_size;
+	mr->nbuf++;
+
+	return 0;
+}
+
+static int rxe_map_mr_sg(struct ib_mr *ibmr, struct scatterlist *sg, int sg_nents,
+			 unsigned int *sg_offset)
+{
+	struct rxe_mem *mr = to_rmr(ibmr);
+	int n;
+
+	mr->nbuf = 0;
+
+	n = ib_sg_to_pages(ibmr, sg, sg_nents, sg_offset, rxe_set_page);
+
+	mr->va = ibmr->iova;
+	mr->iova = ibmr->iova;
+	mr->length = ibmr->length;
+	mr->page_shift = ilog2(ibmr->page_size);
+	mr->page_mask = ibmr->page_size - 1;
+	mr->offset = mr->iova & mr->page_mask;
+
+	return n;
+}
+
 static struct ib_fmr *rxe_alloc_fmr(struct ib_pd *ibpd,
 				    int access, struct ib_fmr_attr *attr)
 {
@@ -1308,6 +1359,7 @@ int rxe_register_device(struct rxe_dev *rxe)
 	dev->reg_user_mr = rxe_reg_user_mr;
 	dev->dereg_mr = rxe_dereg_mr;
 	dev->alloc_mr = rxe_alloc_mr;
+	dev->map_mr_sg = rxe_map_mr_sg;
 	dev->alloc_fmr = rxe_alloc_fmr;
 	dev->map_phys_fmr = rxe_map_phys_fmr;
 	dev->unmap_fmr = rxe_unmap_fmr;

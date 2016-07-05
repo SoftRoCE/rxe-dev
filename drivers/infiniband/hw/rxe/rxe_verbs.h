@@ -334,6 +334,7 @@ struct rxe_mem {
 	int			map_mask;
 
 	u32			num_buf;
+	u32			nbuf;
 
 	u32			max_buf;
 	u32			num_map;

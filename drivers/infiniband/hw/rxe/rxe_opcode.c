@@ -114,13 +114,13 @@ struct rxe_wr_opcode_info rxe_wr_opcode_info[] = {
 	[IB_WR_LOCAL_INV]				= {
 		.name	= "IB_WR_LOCAL_INV",
 		.mask	= {
-			/* not supported */
+			[IB_QPT_RC]	= WR_REG_MASK,
 		},
 	},
 	[IB_WR_REG_MR]					= {
 		.name	= "IB_WR_REG_MR",
 		.mask	= {
-			/* not supported */
+			[IB_QPT_RC]	= WR_REG_MASK,
 		},
 	},
 };

@@ -251,6 +251,9 @@ static int next_opcode_rc(struct rxe_qp *qp, unsigned opcode, int fits)
 		else
 			return fits ? IB_OPCODE_RC_SEND_ONLY_WITH_INVALIDATE :
 				IB_OPCODE_RC_SEND_FIRST;
+	case IB_WR_REG_MR:
+	case IB_WR_LOCAL_INV:
+		return opcode;
 	}
 
 	return -EINVAL;
@@ -591,6 +594,39 @@ next_wqe:
 	wqe = req_next_wqe(qp);
 	if (unlikely(!wqe))
 		goto exit;
+
+	if (wqe->mask & WR_REG_MASK) {
+		if (wqe->wr.opcode == IB_WR_LOCAL_INV) {
+			struct rxe_dev *rxe = to_rdev(qp->ibqp.device);
+			struct rxe_mem *rmr;
+
+			rmr = rxe_pool_get_index(&rxe->mr_pool,
+						 wqe->wr.ex.invalidate_rkey >> 8);
+			if (!rmr) {
+				pr_err("No mr for key %#x\n", wqe->wr.ex.invalidate_rkey);
+				wqe->state = wqe_state_error;
+				wqe->status = IB_WC_MW_BIND_ERR;
+				goto exit;
+			}
+			rmr->state = RXE_MEM_STATE_FREE;
+			wqe->state = wqe_state_done;
+			wqe->status = IB_WC_SUCCESS;
+		} else if (wqe->wr.opcode == IB_WR_REG_MR) {
+			struct rxe_mem *rmr = to_rmr(wqe->wr.wr.reg.mr);
+
+			rmr->state = RXE_MEM_STATE_VALID;
+			rmr->access = wqe->wr.wr.reg.access;
+			rmr->lkey = wqe->wr.wr.reg.key;
+			rmr->rkey = wqe->wr.wr.reg.key;
+			wqe->state = wqe_state_done;
+			wqe->status = IB_WC_SUCCESS;
+		} else {
+			goto exit;
+		}
+		qp->req.wqe_index = next_index(qp->sq.queue,
+						qp->req.wqe_index);
+		goto next_wqe;
+	}
 
 	if (unlikely(qp_type(qp) == IB_QPT_RC &&
 		     qp->req.psn > (qp->comp.psn + RXE_MAX_UNACKED_PSNS))) {

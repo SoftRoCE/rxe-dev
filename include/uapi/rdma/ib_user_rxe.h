@@ -87,6 +87,11 @@ struct rxe_send_wr {
 			__u32	remote_qkey;
 			__u16	pkey_index;
 		} ud;
+		struct {
+			struct ib_mr *mr;
+			__u32        key;
+			int          access;
+		} reg;
 	} wr;
 };
 

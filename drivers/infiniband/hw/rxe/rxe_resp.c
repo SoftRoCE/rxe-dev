@@ -455,6 +455,11 @@ static enum resp_states check_rkey(struct rxe_qp *qp,
 		goto err1;
 	}
 
+	if (unlikely(mem->state == RXE_MEM_STATE_FREE)) {
+		state = RESPST_ERR_RKEY_VIOLATION;
+		goto err1;
+	}
+
 	if (mem_check_range(mem, va, resid)) {
 		state = RESPST_ERR_RKEY_VIOLATION;
 		goto err2;
@@ -867,8 +872,19 @@ static enum resp_states do_complete(struct rxe_qp *qp,
 			}
 
 			if (pkt->mask & RXE_IETH_MASK) {
+				struct rxe_dev *rxe = to_rdev(qp->ibqp.device);
+				struct rxe_mem *rmr;
+
 				wc->wc_flags |= IB_WC_WITH_INVALIDATE;
 				wc->ex.invalidate_rkey = ieth_rkey(pkt);
+
+				rmr = rxe_pool_get_index(&rxe->mr_pool,
+							 wc->ex.invalidate_rkey >> 8);
+				if (unlikely(!rmr)) {
+					pr_err("Bad rkey %#x invalidation\n", wc->ex.invalidate_rkey);
+					return RESPST_ERROR;
+				}
+				rmr->state = RXE_MEM_STATE_FREE;
 			}
 
 			wc->qp			= &qp->ibqp;
