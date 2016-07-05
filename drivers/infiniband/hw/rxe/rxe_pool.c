@@ -35,7 +35,7 @@
 #include "rxe_loc.h"
 
 /* info about object pools
- * note that mr, fmr and mw share a single index space
+ * note that mr and mw share a single index space
  * so that one can map an lkey to the correct type of object
  */
 struct rxe_type_info rxe_type_info[RXE_NUM_TYPES] = {
@@ -79,14 +79,6 @@ struct rxe_type_info rxe_type_info[RXE_NUM_TYPES] = {
 		.flags		= RXE_POOL_INDEX,
 		.max_index	= RXE_MAX_MR_INDEX,
 		.min_index	= RXE_MIN_MR_INDEX,
-	},
-	[RXE_TYPE_FMR] = {
-		.name		= "rxe-fmr",
-		.size		= sizeof(struct rxe_mem),
-		.cleanup	= rxe_mem_cleanup,
-		.flags		= RXE_POOL_INDEX,
-		.max_index	= RXE_MAX_FMR_INDEX,
-		.min_index	= RXE_MIN_FMR_INDEX,
 	},
 	[RXE_TYPE_MW] = {
 		.name		= "rxe-mw",

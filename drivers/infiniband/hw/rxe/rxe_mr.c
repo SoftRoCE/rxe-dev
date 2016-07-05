@@ -80,9 +80,6 @@ static void rxe_mem_init(int access, struct rxe_mem *mem)
 	if (mem->pelem.pool->type == RXE_TYPE_MR) {
 		mem->ibmr.lkey		= lkey;
 		mem->ibmr.rkey		= rkey;
-	} else {
-		mem->ibfmr.lkey		= lkey;
-		mem->ibfmr.rkey		= rkey;
 	}
 
 	mem->lkey		= lkey;
@@ -257,38 +254,6 @@ int rxe_mem_init_fast(struct rxe_dev *rxe, struct rxe_pd *pd,
 	mem->max_buf		= max_pages;
 	mem->state		= RXE_MEM_STATE_FREE;
 	mem->type		= RXE_MEM_TYPE_MR;
-
-	return 0;
-
-err1:
-	return err;
-}
-
-int rxe_mem_init_fmr(struct rxe_dev *rxe, struct rxe_pd *pd, int access,
-		     struct ib_fmr_attr *attr, struct rxe_mem *mem)
-{
-	int err;
-
-	if (attr->max_maps > rxe->attr.max_map_per_fmr) {
-		pr_warn("max_mmaps = %d too big, max_map_per_fmr = %d\n",
-			attr->max_maps, rxe->attr.max_map_per_fmr);
-		err = -EINVAL;
-		goto err1;
-	}
-
-	rxe_mem_init(access, mem);
-
-	err = rxe_mem_alloc(rxe, mem, attr->max_pages);
-	if (err)
-		goto err1;
-
-	mem->pd			= pd;
-	mem->access		= access;
-	mem->page_shift		 = attr->page_shift;
-	mem->page_mask		= (1 << attr->page_shift) - 1;
-	mem->max_buf		= attr->max_pages;
-	mem->state		= RXE_MEM_STATE_FREE;
-	mem->type		= RXE_MEM_TYPE_FMR;
 
 	return 0;
 
@@ -591,7 +556,7 @@ int advance_dma_data(struct rxe_dma_info *dma, unsigned int length)
 	return 0;
 }
 
-/* (1) find the mem (mr, fmr or mw) corresponding to lkey/rkey
+/* (1) find the mem (mr or mw) corresponding to lkey/rkey
  *     depending on lookup_type
  * (2) verify that the (qp) pd matches the mem pd
  * (3) verify that the mem can support the requested access
@@ -606,10 +571,6 @@ struct rxe_mem *lookup_mem(struct rxe_pd *pd, int access, u32 key,
 
 	if (index >= RXE_MIN_MR_INDEX && index <= RXE_MAX_MR_INDEX) {
 		mem = rxe_pool_get_index(&rxe->mr_pool, index);
-		if (!mem)
-			goto err1;
-	} else if (index >= RXE_MIN_FMR_INDEX && index <= RXE_MAX_FMR_INDEX) {
-		mem = rxe_pool_get_index(&rxe->fmr_pool, index);
 		if (!mem)
 			goto err1;
 	} else {

@@ -59,7 +59,6 @@ static void rxe_cleanup(struct rxe_dev *rxe)
 	rxe_pool_cleanup(&rxe->qp_pool);
 	rxe_pool_cleanup(&rxe->cq_pool);
 	rxe_pool_cleanup(&rxe->mr_pool);
-	rxe_pool_cleanup(&rxe->fmr_pool);
 	rxe_pool_cleanup(&rxe->mw_pool);
 	rxe_pool_cleanup(&rxe->mc_grp_pool);
 	rxe_pool_cleanup(&rxe->mc_elem_pool);
@@ -226,34 +225,27 @@ static int rxe_init_pools(struct rxe_dev *rxe)
 	if (err)
 		goto err7;
 
-	err = rxe_pool_init(rxe, &rxe->fmr_pool, RXE_TYPE_FMR,
-			    rxe->attr.max_fmr);
-	if (err)
-		goto err8;
-
 	err = rxe_pool_init(rxe, &rxe->mw_pool, RXE_TYPE_MW,
 			    rxe->attr.max_mw);
 	if (err)
-		goto err9;
+		goto err8;
 
 	err = rxe_pool_init(rxe, &rxe->mc_grp_pool, RXE_TYPE_MC_GRP,
 			    rxe->attr.max_mcast_grp);
 	if (err)
-		goto err10;
+		goto err9;
 
 	err = rxe_pool_init(rxe, &rxe->mc_elem_pool, RXE_TYPE_MC_ELEM,
 			    rxe->attr.max_total_mcast_qp_attach);
 	if (err)
-		goto err11;
+		goto err10;
 
 	return 0;
 
-err11:
-	rxe_pool_cleanup(&rxe->mc_grp_pool);
 err10:
-	rxe_pool_cleanup(&rxe->mw_pool);
+	rxe_pool_cleanup(&rxe->mc_grp_pool);
 err9:
-	rxe_pool_cleanup(&rxe->fmr_pool);
+	rxe_pool_cleanup(&rxe->mw_pool);
 err8:
 	rxe_pool_cleanup(&rxe->mr_pool);
 err7:

@@ -310,7 +310,6 @@ struct rxe_mem {
 	struct rxe_pool_entry	pelem;
 	union {
 		struct ib_mr		ibmr;
-		struct ib_fmr		ibfmr;
 		struct ib_mw		ibmw;
 	};
 
@@ -415,7 +414,6 @@ struct rxe_dev {
 	struct rxe_pool		cq_pool;
 	struct rxe_pool		mr_pool;
 	struct rxe_pool		mw_pool;
-	struct rxe_pool		fmr_pool;
 	struct rxe_pool		mc_grp_pool;
 	struct rxe_pool		mc_elem_pool;
 
@@ -467,11 +465,6 @@ static inline struct rxe_cq *to_rcq(struct ib_cq *cq)
 static inline struct rxe_mem *to_rmr(struct ib_mr *mr)
 {
 	return mr ? container_of(mr, struct rxe_mem, ibmr) : NULL;
-}
-
-static inline struct rxe_mem *to_rfmr(struct ib_fmr *fmr)
-{
-	return fmr ? container_of(fmr, struct rxe_mem, ibfmr) : NULL;
 }
 
 static inline struct rxe_mem *to_rmw(struct ib_mw *mw)

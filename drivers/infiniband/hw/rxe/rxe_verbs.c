@@ -1153,76 +1153,6 @@ static int rxe_map_mr_sg(struct ib_mr *ibmr, struct scatterlist *sg, int sg_nent
 	return n;
 }
 
-static struct ib_fmr *rxe_alloc_fmr(struct ib_pd *ibpd,
-				    int access, struct ib_fmr_attr *attr)
-{
-	struct rxe_dev *rxe = to_rdev(ibpd->device);
-	struct rxe_pd *pd = to_rpd(ibpd);
-	struct rxe_mem *fmr;
-	int err;
-
-	fmr = rxe_alloc(&rxe->fmr_pool);
-	if (!fmr) {
-		err = -ENOMEM;
-		goto err1;
-	}
-
-	rxe_add_index(fmr);
-
-	rxe_add_ref(pd);
-
-	err = rxe_mem_init_fmr(rxe, pd, access, attr, fmr);
-	if (err)
-		goto err2;
-
-	return &fmr->ibfmr;
-
-err2:
-	rxe_drop_ref(pd);
-	rxe_drop_index(fmr);
-	rxe_drop_ref(fmr);
-err1:
-	return ERR_PTR(err);
-}
-
-static int rxe_map_phys_fmr(struct ib_fmr *ibfmr,
-			    u64 *page_list, int list_length, u64 iova)
-{
-	struct rxe_mem *fmr = to_rfmr(ibfmr);
-	struct rxe_dev *rxe = to_rdev(ibfmr->device);
-
-	return rxe_mem_map_pages(rxe, fmr, page_list, list_length, iova);
-}
-
-static int rxe_unmap_fmr(struct list_head *fmr_list)
-{
-	struct rxe_mem *fmr;
-
-	list_for_each_entry(fmr, fmr_list, ibfmr.list) {
-		if (fmr->state != RXE_MEM_STATE_VALID)
-			continue;
-
-		fmr->va = 0;
-		fmr->iova = 0;
-		fmr->length = 0;
-		fmr->num_buf = 0;
-		fmr->state = RXE_MEM_STATE_FREE;
-	}
-
-	return 0;
-}
-
-static int rxe_dealloc_fmr(struct ib_fmr *ibfmr)
-{
-	struct rxe_mem *fmr = to_rfmr(ibfmr);
-
-	fmr->state = RXE_MEM_STATE_ZOMBIE;
-	rxe_drop_ref(fmr->pd);
-	rxe_drop_index(fmr);
-	rxe_drop_ref(fmr);
-	return 0;
-}
-
 static int rxe_attach_mcast(struct ib_qp *ibqp, union ib_gid *mgid, u16 mlid)
 {
 	int err;
@@ -1360,10 +1290,6 @@ int rxe_register_device(struct rxe_dev *rxe)
 	dev->dereg_mr = rxe_dereg_mr;
 	dev->alloc_mr = rxe_alloc_mr;
 	dev->map_mr_sg = rxe_map_mr_sg;
-	dev->alloc_fmr = rxe_alloc_fmr;
-	dev->map_phys_fmr = rxe_map_phys_fmr;
-	dev->unmap_fmr = rxe_unmap_fmr;
-	dev->dealloc_fmr = rxe_dealloc_fmr;
 	dev->attach_mcast = rxe_attach_mcast;
 	dev->detach_mcast = rxe_detach_mcast;
 

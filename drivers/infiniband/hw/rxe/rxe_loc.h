@@ -115,9 +115,6 @@ int rxe_mem_init_user(struct rxe_dev *rxe, struct rxe_pd *pd, u64 start,
 int rxe_mem_init_fast(struct rxe_dev *rxe, struct rxe_pd *pd,
 		      int max_pages, struct rxe_mem *mem);
 
-int rxe_mem_init_fmr(struct rxe_dev *rxe, struct rxe_pd *pd, int access,
-		     struct ib_fmr_attr *attr, struct rxe_mem *fmr);
-
 int rxe_mem_copy(struct rxe_mem *mem, u64 iova, void *addr,
 		 int length, enum copy_direction dir, u32 *crcp);
 
