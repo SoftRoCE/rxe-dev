@@ -35,7 +35,7 @@
 #define RXE_VERBS_H
 
 #include <linux/interrupt.h>
-#include <rdma/ib_user_rxe.h>
+#include <rdma/rdma_user_rxe.h>
 #include "rxe_pool.h"
 #include "rxe_task.h"
 
@@ -372,7 +372,7 @@ struct rxe_port {
 	u32			qp_gsi_index;
 };
 
-/* callbacks from ib_rxe to network interface layer */
+/* callbacks from rdma_rxe to network interface layer */
 struct rxe_ifc_ops {
 	void (*release)(struct rxe_dev *rxe);
 	__be64 (*node_guid)(struct rxe_dev *rxe);
