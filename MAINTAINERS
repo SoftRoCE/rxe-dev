@@ -7437,7 +7437,7 @@ S:	Supported
 W:	https://github.com/SoftRoCE/rxe-dev/wiki/rxe-dev:-Home
 Q:	http://patchwork.kernel.org/project/linux-rdma/list/
 F:	drivers/infiniband/hw/rxe/
-F:	include/uapi/rdma/ib_user_rxe.h
+F:	include/uapi/rdma/rdma_user_rxe.h
 
 MEMBARRIER SUPPORT
 M:	Mathieu Desnoyers <mathieu.desnoyers@efficios.com>

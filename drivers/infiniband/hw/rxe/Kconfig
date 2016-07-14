@@ -1,4 +1,4 @@
-config INFINIBAND_RXE
+config RDMA_RXE
 	tristate "Software RDMA over Ethernet (RoCE) driver"
 	depends on INET && PCI && INFINIBAND
 	depends on NET_UDP_TUNNEL
