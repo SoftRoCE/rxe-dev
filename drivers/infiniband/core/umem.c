@@ -74,6 +74,9 @@ static void __ib_umem_release(struct ib_device *dev, struct ib_umem *umem, int d
  * If access flags indicate ODP memory, avoid pinning. Instead, stores
  * the mm for future page fault handling in conjunction with MMU notifiers.
  *
+ * If access flags indicate SOFTWARE access, avoid dma-mapping. Instead, the
+ * software driver may use the kernel logical addresses of pinned pages.
+ *
  * @context: userspace context to pin memory for
  * @addr: userspace virtual address to start at
  * @size: length of region to pin
@@ -211,15 +214,19 @@ struct ib_umem *ib_umem_get(struct ib_ucontext *context, unsigned long addr,
 		sg_list_start = sg;
 	}
 
-	umem->nmap = ib_dma_map_sg_attrs(context->device,
-				  umem->sg_head.sgl,
-				  umem->npages,
-				  DMA_BIDIRECTIONAL,
-				  &attrs);
+	if (access & IB_ACCESS_SOFTWARE) {
+		umem->nmap = 0;
+	} else {
+		umem->nmap = ib_dma_map_sg_attrs(context->device,
+					  umem->sg_head.sgl,
+					  umem->npages,
+					  DMA_BIDIRECTIONAL,
+					  &attrs);
 
-	if (umem->nmap <= 0) {
-		ret = -ENOMEM;
-		goto out;
+		if (umem->nmap <= 0) {
+			ret = -ENOMEM;
+			goto out;
+		}
 	}
 
 	ret = 0;
