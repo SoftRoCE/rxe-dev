@@ -169,6 +169,8 @@ int rxe_mem_init_user(struct rxe_dev *rxe, struct rxe_pd *pd, u64 start,
 	void			*vaddr;
 	int err;
 
+	access |= IB_ACCESS_SOFTWARE;
+
 	umem = ib_umem_get(pd->ibpd.uobject->context, start, length, access, 0);
 	if (IS_ERR(umem)) {
 		pr_warn("err %d from rxe_umem_get\n",
